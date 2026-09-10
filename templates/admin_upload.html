@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Fashion Hunter | StyleMuse</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="{{ url_for('static', filename='config.js') }}"></script>
+    <style>
+        body { background: #0a0a0a; color: white; padding: 40px; font-family: 'Pretendard', sans-serif; }
+        a { color: #6cf; }
+        .upload-box { border: 2px dashed #444; padding: 40px; text-align: center; cursor: pointer; border-radius: 10px; }
+        #preview { max-width: 300px; margin-top: 20px; display: none; border-radius: 8px; }
+        .btn { background: #fff; color: #000; border: none; padding: 12px 24px; cursor: pointer; margin-top: 20px; font-weight: bold; border-radius: 5px; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .status { margin-top: 20px; color: #ccc; line-height: 1.6; }
+        .error { color: #ff6b6b; }
+        .result-item { margin-top: 10px; padding: 10px; background: #222; border-radius: 5px; border-left: 4px solid #fff; }
+        select { background: #222; color: white; border: 1px solid #444; padding: 10px; border-radius: 5px; margin-top: 20px; }
+        label { display: block; margin-top: 20px; color: #aaa; font-size: 14px; }
+
+        /* --- 매칭 근거 큐레이션 --- */
+        .divider { border: none; border-top: 1px solid #222; margin: 50px 0 30px; }
+        h2 { font-size: 20px; margin-bottom: 8px; }
+        .hint { color: #888; font-size: 13px; line-height: 1.7; margin: 0 0 20px; }
+        .progress { color: #aaa; font-size: 13px; margin-bottom: 16px; }
+
+        .look-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+        .look-tile { background: #1a1a1a; border: 2px solid transparent; border-radius: 10px; overflow: hidden; cursor: pointer; padding: 0; text-align: left; }
+        .look-tile:hover { border-color: #444; }
+        .look-tile.selected { border-color: #fff; }
+        .look-tile img { width: 100%; display: block; aspect-ratio: 3/4; object-fit: cover; }
+        .look-tile .meta { padding: 8px; font-size: 12px; color: #aaa; }
+        .look-tile .badge-done { color: #4ade80; }
+        .look-tile .badge-todo { color: #f59e0b; }
+        .look-tile .badge-private { background: #333; color: #ccc; font-size: 11px; padding: 1px 6px; border-radius: 4px; }
+        .look-tile.private img { opacity: 0.4; }
+        .toggle-public { width: 100%; margin-top: 7px; background: #222; border: 1px solid #3a3a3a; color: #ddd; padding: 5px 0; border-radius: 5px; font-size: 11px; cursor: pointer; font-family: inherit; }
+        .toggle-public:hover { border-color: #666; }
+        .toggle-public.on { background: #1f3a29; border-color: #2f5f42; color: #7ee2a8; }
+        .toggle-public:disabled { opacity: 0.5; cursor: progress; }
+
+        #editor { margin-top: 30px; padding: 20px; background: #111; border: 1px solid #222; border-radius: 12px; }
+        .cur-row { display: flex; gap: 15px; padding: 15px 0; border-top: 1px solid #222; }
+        .cur-row:first-of-type { border-top: none; }
+        .cur-row > img { width: 70px; height: 70px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+        .cur-fields { flex: 1; min-width: 0; }
+        .cur-product { font-weight: bold; margin-bottom: 10px; word-break: break-all; }
+        .cur-fields label { margin-top: 10px; font-size: 12px; }
+        .cur-fields input { width: 100%; box-sizing: border-box; background: #1e1e1e; border: 1px solid #333; color: #fff; padding: 9px 11px; border-radius: 6px; margin-top: 5px; font-size: 14px; font-family: inherit; }
+        .cur-fields input:focus { outline: none; border-color: #666; }
+        .cur-soldout { color: #ff6b6b; font-weight: normal; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>AI Fashion Hunter</h1>
+    <p><a href="{{ url_for('home') }}">← 갤러리로</a></p>
+
+    <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+        <p>클릭하여 코디 사진 업로드</p>
+        <input type="file" id="fileInput" accept="image/*" hidden>
+    </div>
+    <img id="preview" alt="미리보기">
+
+    <label for="styleTag">스타일 태그</label>
+    <select id="styleTag">
+        <option value="긱시크">긱시크</option>
+        <option value="아메카지">아메카지</option>
+        <option value="고프코어" selected>고프코어</option>
+        <option value="미니멀">미니멀</option>
+        <option value="캐주얼">캐주얼</option>
+        <option value="스트릿">스트릿</option>
+        <option value="시티보이">시티보이</option>
+        <option value="힙합">힙합</option>
+    </select>
+
+    <div id="status" class="status"></div>
+    <br>
+    <button class="btn" id="analyzeBtn" onclick="startAnalysis()">분석 및 상품 검색 시작</button>
+
+    <hr class="divider">
+
+    <section id="curation">
+        <h2>매칭 근거 큐레이션</h2>
+        <p class="hint">
+            AI가 찾아온 상품에 <strong>사람이 근거를 붙이는</strong> 단계입니다. 여기서 쓴 문장이 나중에 자동화의 정답 데이터가 됩니다.<br>
+            <strong>원본 아이템 유형</strong>은 핀터레스트 사진 속 옷을 부르는 말입니다. 브랜드명은 넣지 마세요. (예: 스트라이프 카라 반팔티)<br>
+            <strong>매칭 근거</strong>는 왜 이 상품인지 한 줄로 씁니다. (예: 스트라이프 간격과 카라 형태가 유사)
+        </p>
+
+        <div class="progress" id="cur-progress">불러오는 중...</div>
+        <div class="look-grid" id="look-list"></div>
+
+        <div id="editor" hidden></div>
+    </section>
+
+    <script>
+        // CDN 전역 `supabase` 를 가리지 않도록 클라이언트는 다른 이름으로 받는다.
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+        let uploadedImageUrl = '';
+        const statusDiv = document.getElementById('status');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+
+        function esc(value) {
+            return String(value ?? '').replace(/[&<>"']/g, c => (
+                { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+            ));
+        }
+
+        // 1. 파일 업로드 (Supabase Storage)
+        document.getElementById('fileInput').onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                document.getElementById('preview').src = ev.target.result;
+                document.getElementById('preview').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+
+            uploadedImageUrl = '';
+            statusDiv.className = 'status';
+            statusDiv.innerText = '이미지 업로드 중...';
+
+            const safeName = file.name.replace(/[^\w.\-]/g, '_');
+            const { data, error } = await supabaseClient.storage
+                .from('looks')
+                .upload(`public/${Date.now()}_${safeName}`, file);
+
+            if (error) {
+                statusDiv.className = 'status error';
+                statusDiv.innerText = '업로드 실패: ' + error.message;
+                return;
+            }
+
+            uploadedImageUrl = supabaseClient.storage.from('looks').getPublicUrl(data.path).data.publicUrl;
+            statusDiv.innerText = '업로드 완료! 이제 분석 버튼을 누르세요.';
+        };
+
+        // 2. AI 분석 — Edge Function이 코디 등록 → GPT-4o 분석 → 상품 검색 → DB 저장까지 처리한다.
+        async function startAnalysis() {
+            if (!uploadedImageUrl) return alert('사진을 먼저 올려주세요!');
+
+            analyzeBtn.disabled = true;
+            statusDiv.className = 'status';
+            statusDiv.innerText = 'AI가 코디를 분석 중입니다... 잠시만 기다려주세요!';
+
+            try {
+                const { data, error } = await supabaseClient.functions.invoke('analyze-look', {
+                    body: {
+                        imageUrl: uploadedImageUrl,
+                        styleTag: document.getElementById('styleTag').value
+                    }
+                });
+
+                if (error) {
+                    let detail = error.message;
+                    try { detail = (await error.context.json()).error || detail; } catch (_) {}
+                    throw new Error(detail);
+                }
+
+                const items = data.items || [];
+                if (items.length === 0) {
+                    statusDiv.innerHTML = '코디는 등록됐지만 매칭된 상품을 찾지 못했습니다.';
+                    return;
+                }
+
+                statusDiv.innerHTML = '<h3>✅ AI 분석 결과 (DB 저장 완료)</h3>';
+                items.forEach(item => {
+                    statusDiv.innerHTML += `
+                        <div class="result-item">
+                            <strong>${esc(item.product_name)}</strong><br>
+                            ${item.price ? `${Number(item.price).toLocaleString('ko-KR')}원<br>` : ''}
+                            <a href="${esc(item.purchase_url)}" target="_blank" rel="noopener">상품 보러가기</a>
+                        </div>
+                    `;
+                });
+                statusDiv.innerHTML += `<p><a href="{{ url_for('home') }}">갤러리에서 확인하기 →</a></p>`;
+            } catch (err) {
+                console.error(err);
+                statusDiv.className = 'status error';
+                statusDiv.innerText = '분석 실패: ' + err.message;
+            } finally {
+                analyzeBtn.disabled = false;
+            }
+        }
+
+        // ============================================================
+        // 매칭 근거 큐레이션
+        // ============================================================
+        let curationLooks = [];          // 코디 목록
+        const matchIndex = new Map();    // 매칭 id -> 저장돼 있는 값 (변경분 판별용)
+        let selectedLookId = null;
+
+        // 빈 입력은 null 로 저장한다. 프론트가 "null 이면 렌더링하지 않는다" 규칙을 쓰므로
+        // 빈 문자열을 넣으면 빈 줄이 생긴다.
+        const toNull = (v) => {
+            const trimmed = (v || '').trim();
+            return trimmed === '' ? null : trimmed;
+        };
+
+        const matchesOf = (look) =>
+            (look.looks_items_match || []).filter(m => m && m.musinsa_items);
+
+        async function loadCuration() {
+            // 운영 화면은 비공개 코디도 모두 본다. 유저 화면(index.html)만 is_public 으로 거른다.
+            const { data, error } = await supabaseClient
+                .from('pinterest_looks')
+                .select(`
+                    id, image_url, style_tag, is_public,
+                    looks_items_match (
+                        id, original_type, match_reason,
+                        musinsa_items ( id, product_name, image_url, price, sold_out )
+                    )
+                `)
+                .order('id');
+
+            if (error) {
+                document.getElementById('cur-progress').innerHTML =
+                    `<span class="error">코디를 불러오지 못했습니다: ${esc(error.message)}</span>`;
+                return;
+            }
+
+            curationLooks = data;
+            matchIndex.clear();
+            data.forEach(look => matchesOf(look).forEach(m => {
+                matchIndex.set(m.id, { original_type: m.original_type, match_reason: m.match_reason });
+            }));
+
+            renderProgress();
+            renderLookList();
+        }
+
+        // 근거가 채워진 매칭 개수. original_type 과 match_reason 이 모두 있어야 완료로 본다.
+        const isCurated = (m) => {
+            const v = matchIndex.get(m.id) || {};
+            return !!v.original_type && !!v.match_reason;
+        };
+
+        function renderProgress() {
+            let done = 0, total = 0;
+            curationLooks.forEach(look => matchesOf(look).forEach(m => {
+                total++;
+                if (isCurated(m)) done++;
+            }));
+            document.getElementById('cur-progress').textContent =
+                `전체 매칭 ${total}건 중 ${done}건 작성 완료`;
+        }
+
+        function renderLookList() {
+            document.getElementById('look-list').innerHTML = curationLooks.map(look => {
+                const matches = matchesOf(look);
+                const done = matches.filter(isCurated).length;
+                const cls = done === matches.length && matches.length > 0 ? 'badge-done' : 'badge-todo';
+
+                const isPublic = look.is_public !== false;
+
+                return `
+                    <div class="look-tile${look.id === selectedLookId ? ' selected' : ''}${isPublic ? '' : ' private'}"
+                         onclick="openLook(${look.id})">
+                        <img src="${esc(look.image_url)}" alt="코디 ${look.id}">
+                        <div class="meta">
+                            #${look.id} ${esc(look.style_tag || '-')}
+                            ${isPublic ? '' : '<span class="badge-private">비공개</span>'}<br>
+                            <span class="${cls}">${done}/${matches.length} 작성</span>
+                            <button type="button" class="toggle-public${isPublic ? ' on' : ''}"
+                                    data-toggle-id="${look.id}"
+                                    onclick="event.stopPropagation(); togglePublic(${look.id})">
+                                ${isPublic ? '공개 중' : '비공개'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 원본 이미지가 살아 있는지 확인한다. 임베드 방식이라 출처가 지워지면 화면이 깨진다.
+        function imageLoads(url) {
+            return new Promise(resolve => {
+                const img = new Image();
+                const done = (ok) => { clearTimeout(timer); resolve(ok); };
+                const timer = setTimeout(() => done(false), 8000);
+                img.onload = () => done(true);
+                img.onerror = () => done(false);
+                img.src = url;
+            });
+        }
+
+        async function togglePublic(lookId) {
+            const look = curationLooks.find(l => l.id === lookId);
+            if (!look) return;
+
+            const btn = document.querySelector(`[data-toggle-id="${lookId}"]`);
+            const goingPublic = look.is_public === false;
+
+            if (goingPublic) {
+                if (btn) btn.disabled = true;
+                const alive = await imageLoads(look.image_url);
+                if (btn) btn.disabled = false;
+
+                if (!alive) {
+                    alert('원본 이미지를 불러올 수 없어 공개로 전환할 수 없습니다.\n출처가 삭제됐는지 확인해주세요.');
+                    return;
+                }
+
+                // 근거가 없어도 막지는 않는다. 운영자가 알고 넘어가게만 한다.
+                const done = matchesOf(look).filter(isCurated).length;
+                if (done === 0 && !confirm('매칭 근거가 하나도 작성되지 않았습니다.\n이대로 공개할까요?')) return;
+            }
+
+            if (btn) btn.disabled = true;
+            const { error } = await supabaseClient
+                .from('pinterest_looks')
+                .update({ is_public: goingPublic })
+                .eq('id', lookId);
+            if (btn) btn.disabled = false;
+
+            if (error) {
+                alert('공개 상태 변경 실패: ' + error.message);
+                return;
+            }
+
+            look.is_public = goingPublic;
+            // 목록만 다시 그린다. 에디터를 다시 그리면 입력 중이던 내용이 날아간다.
+            renderLookList();
+        }
+
+        function openLook(lookId) {
+            selectedLookId = lookId;
+            renderLookList();
+
+            const look = curationLooks.find(l => l.id === lookId);
+            const matches = matchesOf(look);
+            const editor = document.getElementById('editor');
+            editor.hidden = false;
+
+            if (matches.length === 0) {
+                editor.innerHTML = `<div class="hint">이 코디에는 매칭된 상품이 없습니다. 먼저 분석을 돌려주세요.</div>`;
+                return;
+            }
+
+            editor.innerHTML = `
+                <h3 style="margin-top:0;">#${look.id} ${esc(look.style_tag || '')} — 매칭 ${matches.length}건</h3>
+                <div id="editor-rows">
+                    ${matches.map(m => {
+                        const item = m.musinsa_items;
+                        const stored = matchIndex.get(m.id) || {};
+                        return `
+                            <div class="cur-row">
+                                ${item.image_url ? `<img src="${esc(item.image_url)}" alt="상품">` : ''}
+                                <div class="cur-fields">
+                                    <div class="cur-product">
+                                        ${esc(item.product_name)}
+                                        ${item.sold_out ? '<span class="cur-soldout">(품절)</span>' : ''}
+                                    </div>
+                                    <label>원본 아이템 유형</label>
+                                    <input type="text" data-match-id="${m.id}" data-field="original_type"
+                                           value="${esc(stored.original_type || '')}"
+                                           placeholder="예: 스트라이프 카라 반팔티">
+                                    <label>매칭 근거</label>
+                                    <input type="text" data-match-id="${m.id}" data-field="match_reason"
+                                           value="${esc(stored.match_reason || '')}"
+                                           placeholder="예: 스트라이프 간격과 카라 형태가 유사">
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                <button class="btn" id="curSaveBtn" type="button" onclick="saveCuration()">저장</button>
+                <span id="cur-save-status" class="status" style="margin-left:12px;"></span>
+            `;
+        }
+
+        // 값이 바뀐 행만 골라 업데이트한다.
+        function collectChanges() {
+            const draft = new Map();
+            document.querySelectorAll('#editor-rows input').forEach(el => {
+                const id = Number(el.dataset.matchId);
+                const entry = draft.get(id) || {};
+                entry[el.dataset.field] = toNull(el.value);
+                draft.set(id, entry);
+            });
+
+            const changed = [];
+            draft.forEach((values, id) => {
+                const stored = matchIndex.get(id) || {};
+                if (stored.original_type !== values.original_type || stored.match_reason !== values.match_reason) {
+                    changed.push({ id, values });
+                }
+            });
+            return changed;
+        }
+
+        async function saveCuration() {
+            const btn = document.getElementById('curSaveBtn');
+            const status = document.getElementById('cur-save-status');
+            const changed = collectChanges();
+
+            if (changed.length === 0) {
+                status.className = 'status';
+                status.textContent = '변경된 내용이 없습니다.';
+                return;
+            }
+
+            btn.disabled = true;
+            status.className = 'status';
+            status.textContent = `저장 중... (${changed.length}건)`;
+
+            try {
+                for (const { id, values } of changed) {
+                    const { error } = await supabaseClient
+                        .from('looks_items_match')
+                        .update(values)
+                        .eq('id', id);
+
+                    if (error) throw new Error(error.message);
+                    matchIndex.set(id, values); // 저장된 값을 로컬에도 반영
+                }
+
+                status.textContent = `저장 완료 (${changed.length}건)`;
+                renderProgress();
+                renderLookList();
+            } catch (err) {
+                console.error(err);
+                status.className = 'status error';
+                status.textContent = '저장 실패: ' + err.message;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        loadCuration();
+    </script>
+</body>
+</html>

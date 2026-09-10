@@ -1,0 +1,7 @@
+.env
+node_modules
+.DS_Store
+venv2
+.tools
+__pycache__/
+supabase/.temp/

@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <script src="{{ url_for('static', filename='config.js') }}"></script>
+    <meta charset="UTF-8">
+    <title>StyleMuse</title>
+    <style>
+        /* 기본 설정 */
+        body { background-color: #0a0a0a; color: white; margin: 0; font-family: 'Pretendard', sans-serif; }
+
+        /* 헤더 */
+        header { display: flex; align-items: center; justify-content: space-between; padding: 20px 40px; border-bottom: 1px solid #222; }
+        .logo { font-size: 24px; font-weight: bold; cursor: pointer; }
+        .nav-links { display: flex; gap: 20px; align-items: center; }
+        .nav-links span { cursor: pointer; color: #aaa; }
+        .nav-links span.current { color: #fff; }
+        .nav-links span.inert { cursor: default; color: #555; }
+
+        /* 필터 바 */
+        .filter-bar { display: flex; gap: 10px; padding: 20px 40px; justify-content: center; flex-wrap: wrap; }
+        .filter-btn { padding: 8px 16px; border-radius: 20px; border: none; background: #222; color: white; cursor: pointer; transition: 0.3s; }
+        .filter-btn.active { background: white; color: black; }
+        .filter-btn:disabled { color: #666; opacity: 0.5; cursor: not-allowed; }
+
+        /* 이미지 카드 */
+        #looks-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; padding: 40px; }
+        .card { border-radius: 15px; overflow: hidden; background: #1a1a1a; cursor: pointer; transition: transform 0.3s ease; }
+        .card:hover { transform: scale(1.05); }
+        .card img { width: 100%; display: block; aspect-ratio: 3/4; object-fit: cover; }
+        .card-price { padding: 10px 12px; font-size: 13px; font-weight: bold; color: #ddd; }
+        .feed-empty { grid-column: 1 / -1; text-align: center; color: #777; padding: 60px 0; line-height: 1.7; }
+
+        /* 저장함 */
+        #saved-view { display: none; padding: 40px; }
+        #saved-view h2 { font-size: 20px; margin: 0 0 20px; }
+        .saved-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        /* 볼 수 없는 코디도 자리를 지킨다. 저장 순서가 바뀌면 유저가 무엇을 잃었는지 알 수 없다. */
+        .card.unavailable { cursor: default; display: flex; align-items: center; justify-content: center; aspect-ratio: 3/4; border: 1px dashed #333; background: #131313; }
+        .card.unavailable:hover { transform: none; }
+        .unavailable-msg { color: #777; font-size: 13px; text-align: center; line-height: 1.7; padding: 0 14px; }
+        .saved-empty { text-align: center; color: #777; padding: 70px 20px; line-height: 1.8; }
+        .saved-empty .title { color: #ddd; font-size: 16px; font-weight: bold; }
+        .saved-empty .sub { font-size: 13px; margin-top: 8px; }
+        .go-feed-btn { margin-top: 22px; background: #fff; color: #000; border: none; padding: 11px 22px; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: inherit; font-size: 14px; }
+
+        /* 상세 페이지 */
+        #detail-view { display: none; padding: 40px; gap: 40px; max-width: 1000px; margin: 0 auto; }
+        #detail-left { flex: 1; }
+        #detail-right { flex: 1; }
+        #detail-image { width: 100%; border-radius: 20px; }
+        .item-row { display: flex; align-items: center; gap: 15px; padding: 15px; background: #1a1a1a; margin-bottom: 10px; border-radius: 10px; }
+        .item-row img { width: 80px; height: 80px; border-radius: 10px; object-fit: cover; }
+        .detail-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+        .back-btn { background: none; border: 1px solid white; color: white; padding: 8px 15px; cursor: pointer; border-radius: 5px; }
+
+        /* 저장(하트) 버튼 */
+        .save-btn { background: none; border: 1px solid #333; color: #fff; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 1; transition: 0.2s; }
+        .save-btn:hover { border-color: #666; }
+        .save-btn.saved { color: #ff4d6d; border-color: #ff4d6d; }
+
+        /* 코디 재현 총액 */
+        .total-block { margin-top: 20px; padding: 18px 20px; background: #141414; border: 1px solid #222; border-radius: 14px; }
+        .total-label { font-size: 13px; color: #888; }
+        .total-amount { font-size: 30px; font-weight: bold; margin-top: 6px; letter-spacing: -0.5px; }
+        .total-note { font-size: 12px; color: #777; margin-top: 6px; }
+
+        /* 아이템 카드 */
+        .item-name { font-weight: bold; }
+        .item-price { color: #aaa; margin: 5px 0; }
+        .match-reason { color: #888; font-size: 12px; line-height: 1.5; margin: 4px 0 8px; }
+        .buy-link { color: white; text-decoration: underline; }
+        .item-row.sold-out { opacity: 0.45; }
+        .sold-out-tag { color: #ff6b6b; font-weight: normal; font-size: 13px; }
+        .buy-link.disabled { color: #666; text-decoration: none; cursor: not-allowed; }
+        .empty-msg { color: #777; padding: 20px 0; }
+
+        /* 토스트 */
+        #toast { position: fixed; left: 50%; bottom: 40px; transform: translate(-50%, 10px); background: #fff; color: #000; padding: 12px 22px; border-radius: 999px; font-size: 14px; font-weight: bold; opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s; z-index: 1100; }
+        #toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+        @media (max-width: 768px) {
+            #detail-view { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">
+            <a href="{{ url_for('home') }}" style="text-decoration: none; color: white;">StyleMuse</a>
+        </div>
+
+        <div class="nav-links">
+            <span id="nav-explore" onclick="showFeed()">EXPLORE</span>
+            <span id="nav-saved" onclick="showSaved()">SAVED</span>
+            <span class="inert">OUTFITS</span>
+            <a href="{{ url_for('notices') }}" style="text-decoration: none; color: white; cursor: pointer; font-size: 1.2rem;">🔔</a>
+        </div>
+    </header>
+
+    <!-- 칩은 renderFilterBar() 가 채운다. 어떤 태그가 열릴지는 불러온 데이터로 정해진다. -->
+    <div class="filter-bar"></div>
+
+    <div id="looks-container"></div>
+
+    <div id="saved-view">
+        <h2>저장한 코디</h2>
+        <div id="saved-body"></div>
+    </div>
+
+    <div id="detail-view">
+        <div id="detail-left">
+            <img id="detail-image" src="" alt="상세이미지">
+            <div id="total-block"></div>
+        </div>
+        <div id="detail-right">
+            <div class="detail-head">
+                <button class="back-btn" type="button" onclick="goBack()">← 뒤로가기</button>
+                <button class="save-btn" id="save-btn" type="button" onclick="toggleSave()" aria-pressed="false" aria-label="저장">♡</button>
+            </div>
+            <h2 id="detail-title">코디 상세 아이템</h2>
+            <div id="detail-items"></div>
+        </div>
+    </div>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    let allLooks = [];
+    let currentLook = null;
+
+    // 'all' 이면 전체, 그 외에는 해당 style_tag 만 보여준다.
+    let activeTag = 'all';
+
+    // 칩에 보여줄 스타일과 그 순서. "어떤 태그가 있는가"만 정하고,
+    // "어떤 태그가 열려 있는가"는 데이터에서 계산한다(tagCounts 참고).
+    const STYLE_TAGS = ['긱시크', '아메카지', '고프코어', '미니멀', '캐주얼', '스트릿', '시티보이', '힙합'];
+
+    // 상품명 등 외부 문자열이 마크업을 깨뜨리지 않도록 이스케이프
+    function esc(value) {
+        return String(value ?? '').replace(/[&<>"']/g, c => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+        ));
+    }
+
+    // --- 1. Supabase에서 데이터 로드 ---
+    async function loadLooks() {
+        // original_type / match_reason 은 코디-상품 관계에 종속되므로 연결 테이블에서 가져온다.
+        // musinsa_items(*) 에는 sold_out 이 포함된다.
+        // 비공개 코디는 유저 화면에 내려보내지 않는다. 데이터는 남아 있고 운영 화면에서만 보인다.
+        const { data, error } = await supabaseClient
+            .from('pinterest_looks')
+            .select(`
+                *,
+                looks_items_match (
+                    original_type,
+                    match_reason,
+                    musinsa_items (*)
+                )
+            `)
+            .eq('is_public', true);
+
+        if (error) { console.error(error); return; }
+        allLooks = data;
+        renderFilterBar();
+        renderLooks(visibleLooks());
+        showScreen('feed');
+    }
+
+    // 현재 선택된 스타일의 코디만 추린다.
+    function visibleLooks() {
+        if (activeTag === 'all') return allLooks;
+        return allLooks.filter(look => look.style_tag === activeTag);
+    }
+
+    // 불러온 코디를 style_tag 로 집계한다. 코디가 한 건도 없는 태그는 칩이 잠긴다.
+    function tagCounts() {
+        const counts = new Map();
+        allLooks.forEach(look => {
+            if (!look.style_tag) return;
+            counts.set(look.style_tag, (counts.get(look.style_tag) || 0) + 1);
+        });
+        return counts;
+    }
+
+    // 필터 칩을 데이터에 맞춰 그린다.
+    // 활성 표시는 activeTag 하나로만 결정한다(DOM 클래스를 상태로 쓰지 않는다).
+    function renderFilterBar() {
+        const counts = tagCounts();
+
+        // STYLE_TAGS 에 없는 태그가 데이터에 있으면 뒤에 덧붙인다.
+        const extras = [...counts.keys()].filter(tag => !STYLE_TAGS.includes(tag));
+        const chips = [{ tag: 'all', label: 'All', enabled: true }].concat(
+            STYLE_TAGS.concat(extras).map(tag => ({
+                tag,
+                label: tag,
+                enabled: (counts.get(tag) || 0) > 0
+            }))
+        );
+
+        document.querySelector('.filter-bar').innerHTML = chips.map(chip => {
+            const active = chip.tag === activeTag ? ' active' : '';
+            return chip.enabled
+                ? `<button class="filter-btn${active}" type="button" onclick="filterLooks('${esc(chip.tag)}')">${esc(chip.label)}</button>`
+                : `<button class="filter-btn" type="button" disabled>${esc(chip.label)}</button>`;
+        }).join('');
+    }
+
+    // 코디의 매칭 아이템 중 품절이 아닌 것들의 가격 합을 낸다.
+    // 품절로 빠진 개수를 함께 돌려주어, 합계가 코디 전체 가격이 아님을 화면에서 밝힐 수 있게 한다.
+    function calcTotal(look) {
+        const items = (look?.looks_items_match || [])
+            .map(m => m.musinsa_items)
+            .filter(Boolean);
+
+        let total = 0;
+        let excludedCount = 0;
+
+        items.forEach(item => {
+            if (item.sold_out) {
+                excludedCount++;
+                return;
+            }
+            total += Number(item.price) || 0;
+        });
+
+        return { total, excludedCount };
+    }
+
+    // --- 2. 화면 렌더링 ---
+    // 코디 재현 총액대. 매칭 아이템이 없으면 빈 문자열을 돌려 표시하지 않는다.
+    function priceBandLabel(look) {
+        const hasItems = (look.looks_items_match || []).some(m => m && m.musinsa_items);
+        if (!hasItems) return '';
+
+        const { total } = calcTotal(look);
+        return `${Math.floor(total / 10000)}만원대`;
+    }
+
+    // 피드와 저장함이 같은 카드를 쓴다. 카드에 style_tag 는 넣지 않는다(필터 칩과 중복).
+    function lookCardHTML(look, origin) {
+        const band = priceBandLabel(look);
+        return `
+            <div class="card" onclick="openLookById(${look.id}, '${origin}')">
+                <img src="${esc(look.image_url)}" alt="패션">
+                ${band ? `<div class="card-price">${band}</div>` : ''}
+            </div>
+        `;
+    }
+
+    const findLook = (id) => allLooks.find(look => look.id === id) || null;
+
+    function openLookById(id, origin) {
+        const look = findLook(id);
+        if (look) showDetail(look, origin);
+    }
+
+    function renderLooks(looks) {
+        const container = document.getElementById('looks-container');
+
+        container.innerHTML = looks.length === 0
+            ? `<div class="feed-empty">준비 중인 스타일이에요</div>`
+            : looks.map(look => lookCardHTML(look, 'feed')).join('');
+    }
+
+    // --- 3. 화면 전환 ---
+    // 세 화면(피드·저장함·상세)의 표시 여부를 이 함수 하나에서만 바꾼다.
+    let detailOrigin = 'feed'; // 상세에서 뒤로가기 했을 때 돌아갈 화면
+
+    function showScreen(name) {
+        document.querySelector('.filter-bar').style.display = name === 'feed' ? 'flex' : 'none';
+        document.getElementById('looks-container').style.display = name === 'feed' ? 'grid' : 'none';
+        document.getElementById('saved-view').style.display = name === 'saved' ? 'block' : 'none';
+        document.getElementById('detail-view').style.display = name === 'detail' ? 'flex' : 'none';
+
+        document.getElementById('nav-explore').classList.toggle('current', name === 'feed');
+        document.getElementById('nav-saved').classList.toggle('current', name === 'saved');
+
+        window.scrollTo(0, 0);
+    }
+
+    function showFeed() {
+        currentLook = null;
+        showScreen('feed');
+    }
+
+    // --- 4. 저장함 ---
+    function showSaved() {
+        currentLook = null;
+        renderSavedLooks();
+        showScreen('saved');
+    }
+
+    function renderSavedLooks() {
+        const savedIds = readSavedLooks();
+        const body = document.getElementById('saved-body');
+
+        if (savedIds.length === 0) {
+            body.innerHTML = `
+                <div class="saved-empty">
+                    <div class="title">아직 저장한 코디가 없어요</div>
+                    <div class="sub">마음에 드는 코디를 저장하면 여기에서 다시 볼 수 있어요</div>
+                    <button class="go-feed-btn" type="button" onclick="showFeed()">코디 보러가기</button>
+                </div>
+            `;
+            return;
+        }
+
+        // 저장 순서를 그대로 유지한다. 볼 수 없는 코디도 자리를 비우지 않는다.
+        // 저장은 "나중에 다시 보겠다"는 약속이므로 localStorage 에서 임의로 지우지 않는다.
+        body.innerHTML = `<div class="saved-grid">${savedIds.map(id => {
+            const look = findLook(id);
+            return look
+                ? lookCardHTML(look, 'saved')
+                : `<div class="card unavailable"><div class="unavailable-msg">현재 볼 수 없는 코디</div></div>`;
+        }).join('')}</div>`;
+    }
+
+    // --- 5. 상세 페이지 보기 ---
+    function showDetail(look, origin = 'feed') {
+        currentLook = look;
+        detailOrigin = origin;
+
+        document.getElementById('detail-image').src = look.image_url;
+        showScreen('detail');
+
+        renderSaveButton();
+        renderTotalBlock();
+        renderDetailItems();
+    }
+
+    // 매칭 행(연결 테이블)을 그대로 들고 다닌다.
+    // match_reason 은 상품이 아니라 코디-상품 관계에 붙은 값이라 musinsa_items 로 평탄화하면 안 된다.
+    function matchRows() {
+        return (currentLook?.looks_items_match || []).filter(m => m && m.musinsa_items);
+    }
+
+    // 원본 이미지 아래 코디 재현 총액.
+    function renderTotalBlock() {
+        const block = document.getElementById('total-block');
+        if (matchRows().length === 0) { block.innerHTML = ''; return; }
+
+        const { total, excludedCount } = calcTotal(currentLook);
+
+        block.innerHTML = `
+            <div class="total-block">
+                <div class="total-label">이 코디, 국내 아이템으로</div>
+                <div class="total-amount">${total.toLocaleString('ko-KR')}원</div>
+                ${excludedCount > 0 ? `<div class="total-note">품절 ${excludedCount}개 제외</div>` : ''}
+            </div>
+        `;
+    }
+
+    // 상세 화면의 아이템 목록.
+    function renderDetailItems() {
+        const rows = matchRows();
+
+        if (rows.length === 0) {
+            document.getElementById('detail-items').innerHTML =
+                `<div class="empty-msg">아직 매칭된 아이템이 없습니다.</div>`;
+            return;
+        }
+
+        // 품절 아이템도 순서를 바꾸지 않고 제자리에 둔다.
+        document.getElementById('detail-items').innerHTML = rows.map(match => {
+            const item = match.musinsa_items;
+            const soldOut = item.sold_out === true;
+            const reason = (match.match_reason || '').trim();
+
+            return `
+                <div class="item-row${soldOut ? ' sold-out' : ''}">
+                    ${item.image_url ? `<img src="${esc(item.image_url)}" alt="상품">` : ''}
+                    <div>
+                        <div class="item-name">${esc(item.product_name)}${soldOut ? ' <span class="sold-out-tag">(품절)</span>' : ''}</div>
+                        ${item.price ? `<div class="item-price">${Number(item.price).toLocaleString('ko-KR')}원</div>` : ''}
+                        ${reason ? `<div class="match-reason">${esc(reason)}</div>` : ''}
+                        ${soldOut
+                            ? `<span class="buy-link disabled" aria-disabled="true">구매하기</span>`
+                            : `<a class="buy-link" href="${esc(item.purchase_url)}" target="_blank" rel="noopener">구매하기</a>`}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // --- 4. 저장(하트) ---
+    // localStorage 는 시크릿 창이나 사이트 데이터 차단 시 접근만 해도 예외가 난다.
+    const SAVED_KEY = 'saved_looks';
+
+    function readSavedLooks() {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]');
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function writeSavedLooks(ids) {
+        try {
+            localStorage.setItem(SAVED_KEY, JSON.stringify(ids));
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function renderSaveButton() {
+        const btn = document.getElementById('save-btn');
+        if (!btn || !currentLook) return;
+
+        const saved = readSavedLooks().includes(currentLook.id);
+        btn.textContent = saved ? '♥' : '♡';
+        btn.classList.toggle('saved', saved);
+        btn.setAttribute('aria-pressed', String(saved));
+        btn.setAttribute('aria-label', saved ? '저장 취소' : '저장');
+    }
+
+    function toggleSave() {
+        if (!currentLook) return;
+
+        const ids = readSavedLooks();
+        const index = ids.indexOf(currentLook.id);
+        const willSave = index === -1;
+
+        if (willSave) ids.push(currentLook.id);
+        else ids.splice(index, 1);
+
+        if (!writeSavedLooks(ids)) {
+            showToast('저장할 수 없어요');
+            return;
+        }
+
+        renderSaveButton();
+        if (willSave) showToast('저장했어요');
+    }
+
+    let toastTimer = null;
+
+    function showToast(message) {
+        const el = document.getElementById('toast');
+        el.textContent = message; // textContent 이므로 별도 이스케이프가 필요 없다
+        el.classList.add('visible');
+
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove('visible'), 2000);
+    }
+
+    // --- 6. 기타 기능 ---
+    // 들어온 화면으로 돌아간다. 저장함에서 들어왔는데 피드로 보내면 보던 자리를 잃는다.
+    function goBack() {
+        currentLook = null;
+        if (detailOrigin === 'saved') showSaved();
+        else showFeed();
+    }
+
+    function filterLooks(tag) {
+        activeTag = tag;
+        renderFilterBar();
+        renderLooks(visibleLooks());
+    }
+
+    loadLooks();
+</script>
+</body>
+</html>
