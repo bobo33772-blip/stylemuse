@@ -2,76 +2,55 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0a0a">
     <title>공지사항 | StyleMuse</title>
     <style>
-        /* 공통 스타일 */
-        body { background-color: #0a0a0a; color: white; margin: 0; font-family: 'Pretendard', sans-serif; }
-        
-        /* 헤더 스타일 (index.html과 동일하게) */
-        header { display: flex; align-items: center; justify-content: space-between; padding: 20px 40px; border-bottom: 1px solid #222; }
-        .logo { font-size: 24px; font-weight: bold; cursor: pointer; }
-        .search-box { background: #222; border-radius: 20px; padding: 8px 15px; width: 300px; display: flex; align-items: center; color: #888; }
-        .search-box svg { margin-right: 10px; flex-shrink: 0; }
-        .search-box input { background: none; border: none; color: white; margin-left: 5px; width: 100%; outline: none; }
-        .nav-links { display: flex; gap: 20px; align-items: center; }
-        .nav-links span { cursor: pointer; color: #aaa; }
+        /* index.html 과 같은 모바일 우선 기준. 앱 폭 480px. */
+        body { margin: 0; background: #000; color: white; font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; -webkit-font-smoothing: antialiased; }
 
-        /* 컨테이너 */
-        .container { max-width: 900px; margin: 40px auto; padding: 0 20px; }
-        h1 { margin-bottom: 30px; font-size: 28px; }
+        .app { max-width: 480px; margin: 0 auto; min-height: 100vh; background: #0a0a0a; padding-bottom: env(safe-area-inset-bottom); }
 
-        /* 테이블 스타일 */
-        .notice-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        .notice-table th { border-top: 2px solid #fff; border-bottom: 1px solid #333; padding: 15px; text-align: left; font-size: 14px; }
-        .notice-table td { border-bottom: 1px solid #222; padding: 20px 15px; font-size: 15px; color: #ccc; }
-        .notice-table tr:hover { background: #1a1a1a; cursor: pointer; transition: 0.2s; }
+        /* 상단: 뒤로가기 + 화면 이름. 검색창은 두지 않는다(확정 결정). */
+        header { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 12px; border-bottom: 1px solid #1c1c1c; position: sticky; top: 0; background: #0a0a0a; }
+        .back-link { color: #ddd; text-decoration: none; font-size: 20px; line-height: 1; padding: 4px 6px; }
+        .screen-name { font-size: 16px; font-weight: bold; }
 
-        /* 뱃지 */
-        .badge { background: #333; padding: 4px 8px; border-radius: 4px; font-size: 12px; color: #fff; margin-right: 10px; }
+        .container { padding: 18px 16px 30px; }
+
+        /* 좁은 화면에서는 표보다 목록이 읽기 쉽다 */
+        .notice-item { display: block; padding: 16px 2px; border-bottom: 1px solid #1c1c1c; }
+        .notice-title { font-size: 14px; color: #eee; line-height: 1.6; }
+        .notice-date { font-size: 12px; color: #666; margin-top: 7px; }
+
+        .badge { background: #2a2a2a; padding: 3px 7px; border-radius: 4px; font-size: 11px; color: #ddd; margin-right: 7px; }
         .badge.notice { background: #fff; color: #000; font-weight: bold; }
     </style>
 </head>
 <body>
 
+  <div class="app">
     <header>
-        <div class="logo">
-            <a href="{{ url_for('home') }}" style="text-decoration: none; color: white;">StyleMuse</a>
-        </div>
-        <div class="search-box">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            <input type="text" placeholder="Search outfit styles">
-        </div>
-        <div class="nav-links">
-            <span>EXPLORE</span><span>SAVED</span><span>OUTFITS</span>
-            <a href="{{ url_for('notices') }}" style="text-decoration: none; color: white; cursor: pointer;">🔔</a>
-        </div>
+        <a class="back-link" href="{{ url_for('home') }}" aria-label="뒤로가기">←</a>
+        <div class="screen-name">공지사항</div>
     </header>
 
     <div class="container">
-        <h1>공지사항</h1>
+        <div class="notice-item">
+            <div class="notice-title">
+                <span class="badge notice">공지</span>StyleMuse 여름 시즌 업데이트 안내
+            </div>
+            <div class="notice-date">2026.06.26</div>
+        </div>
 
-        <table class="notice-table">
-            <thead>
-                <tr>
-                    <th style="width: 80px;">번호</th>
-                    <th>제목</th>
-                    <th style="width: 120px;">날짜</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr onclick="location.href='#'">
-                    <td>2</td>
-                    <td><span class="badge notice">공지</span> StyleMuse 여름 시즌 업데이트 안내</td>
-                    <td>2026.06.26</td>
-                </tr>
-                <tr onclick="location.href='#'">
-                    <td>1</td>
-                    <td><span class="badge">업데이트</span> 고프코어 스타일 AI 분석 기능 추가</td>
-                    <td>2026.06.20</td>
-                </tr>
-            </tbody>
-        </table>
+        <div class="notice-item">
+            <div class="notice-title">
+                <span class="badge">업데이트</span>고프코어 스타일 AI 분석 기능 추가
+            </div>
+            <div class="notice-date">2026.06.20</div>
+        </div>
     </div>
+  </div>
 
 </body>
 </html>
