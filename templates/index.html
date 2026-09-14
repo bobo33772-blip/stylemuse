@@ -3,99 +3,232 @@
 <head>
     <script src="{{ url_for('static', filename='config.js') }}"></script>
     <meta charset="UTF-8">
+    <!-- 이게 없으면 모바일 브라우저가 980px 가상 폭으로 그린 뒤 축소해 버린다. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0a0a">
     <title>StyleMuse</title>
-    <style>
-        /* 기본 설정 */
-        body { background-color: #0a0a0a; color: white; margin: 0; font-family: 'Pretendard', sans-serif; }
 
-        /* 헤더 */
-        header { display: flex; align-items: center; justify-content: space-between; padding: 20px 40px; border-bottom: 1px solid #222; }
-        .logo { font-size: 24px; font-weight: bold; cursor: pointer; }
-        .nav-links { display: flex; gap: 20px; align-items: center; }
-        .nav-links span { cursor: pointer; color: #aaa; }
-        .nav-links span.current { color: #fff; }
-        .nav-links span.inert { cursor: default; color: #555; }
+    <!-- 홈 화면에 추가했을 때 브라우저 UI 없이 뜨게 한다 -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="StyleMuse">
+    <style>
+        /* ============================================================
+           모바일 우선. 기본 스타일이 폰 화면이고, 넓은 화면에서는
+           앱 폭(480px)으로 가두어 좌우를 더 어두운 톤으로 채운다.
+           폭이 고정이라 미디어쿼리가 거의 필요 없다.
+           ============================================================ */
+        * { -webkit-tap-highlight-color: transparent; }
+
+        body {
+            margin: 0;
+            background: #000;                   /* 앱 바깥 여백 */
+            color: white;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* 앱 영역 */
+        .app {
+            max-width: 480px;
+            margin: 0 auto;
+            min-height: 100vh;
+            background: #0a0a0a;
+            /* 하단 탭 높이 + 아이폰 홈 인디케이터 여백 */
+            padding-bottom: calc(60px + env(safe-area-inset-bottom));
+        }
+
+        /* 상단: 서비스명만 */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 52px;
+            border-bottom: 1px solid #1c1c1c;
+            position: sticky;
+            top: 0;
+            background: #0a0a0a;
+            z-index: 50;
+        }
+        .logo { font-size: 17px; font-weight: bold; letter-spacing: -0.2px; }
+        .logo a { text-decoration: none; color: #fff; }
+
+        /* 하단 고정 탭 */
+        .tab-bar {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 480px;
+            display: flex;
+            background: #101010;
+            border-top: 1px solid #1c1c1c;
+            padding-bottom: env(safe-area-inset-bottom);
+            z-index: 100;
+        }
+        .tab {
+            flex: 1;
+            background: none;
+            border: none;
+            color: #666;
+            font-family: inherit;
+            font-size: 11px;
+            padding: 9px 0 8px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+        }
+        .tab svg { width: 22px; height: 22px; fill: currentColor; display: block; }
+        .tab.active { color: #fff; }
 
         /* 필터 바 */
-        .filter-bar { display: flex; gap: 10px; padding: 20px 40px; justify-content: center; flex-wrap: wrap; }
-        .filter-btn { padding: 8px 16px; border-radius: 20px; border: none; background: #222; color: white; cursor: pointer; transition: 0.3s; }
-        .filter-btn.active { background: white; color: black; }
+        .filter-bar {
+            display: flex;
+            gap: 7px;
+            padding: 12px;
+            overflow-x: auto;                   /* 좁은 화면에서는 가로 스크롤 */
+            scrollbar-width: none;
+        }
+        .filter-bar::-webkit-scrollbar { display: none; }
+        .filter-btn {
+            flex: 0 0 auto;
+            padding: 7px 14px;
+            border-radius: 20px;
+            border: none;
+            background: #1e1e1e;
+            color: #ddd;
+            font-family: inherit;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .filter-btn.active { background: #fff; color: #000; font-weight: bold; }
         .filter-btn:disabled { color: #666; opacity: 0.5; cursor: not-allowed; }
 
-        /* 이미지 카드 */
-        #looks-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; padding: 40px; }
-        .card { border-radius: 15px; overflow: hidden; background: #1a1a1a; cursor: pointer; transition: transform 0.3s ease; }
-        .card:hover { transform: scale(1.05); }
+        /* 코디 카드 — 피드·저장함 공용 */
+        .card { border-radius: 12px; overflow: hidden; background: #151515; cursor: pointer; }
         .card img { width: 100%; display: block; aspect-ratio: 3/4; object-fit: cover; }
-        .card-price { padding: 10px 12px; font-size: 13px; font-weight: bold; color: #ddd; }
+        .card-price { padding: 8px 10px; font-size: 12px; font-weight: bold; color: #ddd; }
+        .card:active { opacity: 0.75; }
+
+        /* 피드 — 탐색 화면 */
+        #looks-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            padding: 0 12px 12px;
+        }
         .feed-empty { grid-column: 1 / -1; text-align: center; color: #777; padding: 60px 0; line-height: 1.7; }
 
-        /* 저장함 */
-        #saved-view { display: none; padding: 40px; }
-        #saved-view h2 { font-size: 20px; margin: 0 0 20px; }
-        .saved-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-        /* 볼 수 없는 코디도 자리를 지킨다. 저장 순서가 바뀌면 유저가 무엇을 잃었는지 알 수 없다. */
+        /* 저장함 — 이미 아는 코디를 다시 찾는 화면 */
+        #saved-view { display: none; padding: 16px 12px; }
+        #saved-view h2 { font-size: 17px; margin: 0 0 14px; }
+        .saved-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        /* 볼 수 없는 코디도 자리를 지킨다. 순서가 바뀌면 유저가 무엇을 잃었는지 알 수 없다. */
         .card.unavailable { cursor: default; display: flex; align-items: center; justify-content: center; aspect-ratio: 3/4; border: 1px dashed #333; background: #131313; }
-        .card.unavailable:hover { transform: none; }
-        .unavailable-msg { color: #777; font-size: 13px; text-align: center; line-height: 1.7; padding: 0 14px; }
-        .saved-empty { text-align: center; color: #777; padding: 70px 20px; line-height: 1.8; }
-        .saved-empty .title { color: #ddd; font-size: 16px; font-weight: bold; }
+        .card.unavailable:active { opacity: 1; }
+        .unavailable-msg { color: #777; font-size: 12px; text-align: center; line-height: 1.6; padding: 0 12px; }
+        .saved-empty { text-align: center; color: #777; padding: 60px 20px; line-height: 1.8; }
+        .saved-empty .title { color: #ddd; font-size: 15px; font-weight: bold; }
         .saved-empty .sub { font-size: 13px; margin-top: 8px; }
-        .go-feed-btn { margin-top: 22px; background: #fff; color: #000; border: none; padding: 11px 22px; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: inherit; font-size: 14px; }
+        .go-feed-btn { margin-top: 20px; background: #fff; color: #000; border: none; padding: 11px 22px; border-radius: 6px; font-weight: bold; cursor: pointer; font-family: inherit; font-size: 14px; }
 
-        /* 상세 페이지 */
-        #detail-view { display: none; padding: 40px; gap: 40px; max-width: 1000px; margin: 0 auto; }
-        #detail-left { flex: 1; }
-        #detail-right { flex: 1; }
-        #detail-image { width: 100%; border-radius: 20px; }
-        .item-row { display: flex; align-items: center; gap: 15px; padding: 15px; background: #1a1a1a; margin-bottom: 10px; border-radius: 10px; }
-        .item-row img { width: 80px; height: 80px; border-radius: 10px; object-fit: cover; }
-        .detail-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-        .back-btn { background: none; border: 1px solid white; color: white; padding: 8px 15px; cursor: pointer; border-radius: 5px; }
+        /* 로그인 · 프로필 */
+        #auth-view, #profile-view { display: none; padding: 28px 20px 20px; }
+        .form-title { font-size: 20px; font-weight: bold; margin-bottom: 8px; }
+        .form-sub { color: #888; font-size: 13px; line-height: 1.7; margin-bottom: 24px; }
+        .field { margin-bottom: 16px; }
+        .field label { display: block; color: #aaa; font-size: 13px; margin-bottom: 6px; }
+        .field input, .field select {
+            width: 100%; box-sizing: border-box;
+            background: #1a1a1a; border: 1px solid #333; color: #fff;
+            padding: 12px; border-radius: 7px;
+            font-size: 16px;                    /* 16px 미만이면 iOS 가 입력 시 화면을 확대한다 */
+            font-family: inherit;
+        }
+        .field input:focus, .field select:focus { outline: none; border-color: #666; }
+        .field .unit { color: #666; font-size: 12px; margin-left: 6px; }
+        .field-hint { color: #777; font-size: 12px; line-height: 1.6; margin-bottom: 8px; }
+        .field-row { display: flex; gap: 10px; }
+        .field-row select { flex: 1; min-width: 0; }
+        .primary-btn { width: 100%; background: #fff; color: #000; border: none; padding: 13px; border-radius: 7px; font-weight: bold; font-size: 15px; cursor: pointer; font-family: inherit; margin-top: 6px; }
+        .primary-btn:disabled { opacity: 0.5; cursor: progress; }
+        .link-btn { background: none; border: none; color: #8ab4ff; cursor: pointer; font-size: 13px; font-family: inherit; padding: 0; text-decoration: underline; }
+        .form-switch { text-align: center; margin-top: 20px; color: #888; font-size: 13px; }
+        .form-msg { margin-top: 14px; font-size: 13px; line-height: 1.6; min-height: 18px; }
+        .form-msg.error { color: #ff6b6b; }
+        .form-msg.ok { color: #7ee2a8; }
+        .profile-account { color: #888; font-size: 13px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #1c1c1c; }
 
-        /* 저장(하트) 버튼 */
-        .save-btn { background: none; border: 1px solid #333; color: #fff; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 1; transition: 0.2s; }
-        .save-btn:hover { border-color: #666; }
+        /* 프로필 하단 메뉴 */
+        .profile-links { margin-top: 30px; border-top: 1px solid #1c1c1c; }
+        .profile-link {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 15px 2px; border-bottom: 1px solid #1c1c1c;
+            color: #ddd; font-size: 14px; text-decoration: none;
+        }
+        .profile-link .chev { color: #555; }
+        .profile-link.muted { color: #666; }
+        .profile-link .tag { font-size: 11px; color: #666; background: #1c1c1c; padding: 2px 7px; border-radius: 4px; }
+        .logout-btn { background: none; border: 1px solid #2a2a2a; color: #aaa; padding: 12px; border-radius: 7px; cursor: pointer; font-family: inherit; font-size: 13px; width: 100%; margin-top: 24px; }
+
+        /* 코디 상세 */
+        #detail-view { display: none; flex-direction: column; padding: 16px 12px; }
+        #detail-image { width: 100%; border-radius: 12px; display: block; }
+        .detail-head { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 14px; }
+        .back-btn { background: none; border: 1px solid #333; color: #ddd; padding: 8px 14px; cursor: pointer; border-radius: 6px; font-family: inherit; font-size: 13px; }
+        #detail-title { font-size: 16px; margin: 0 0 12px; }
+
+        .save-btn { background: none; border: 1px solid #333; color: #fff; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 1; }
         .save-btn.saved { color: #ff4d6d; border-color: #ff4d6d; }
 
         /* 코디 재현 총액 */
-        .total-block { margin-top: 20px; padding: 18px 20px; background: #141414; border: 1px solid #222; border-radius: 14px; }
-        .total-label { font-size: 13px; color: #888; }
-        .total-amount { font-size: 30px; font-weight: bold; margin-top: 6px; letter-spacing: -0.5px; }
-        .total-note { font-size: 12px; color: #777; margin-top: 6px; }
+        .total-block { margin-top: 14px; padding: 16px; background: #141414; border: 1px solid #1f1f1f; border-radius: 12px; }
+        .total-label { font-size: 12px; color: #888; }
+        .total-amount { font-size: 26px; font-weight: bold; margin-top: 5px; letter-spacing: -0.5px; }
+        .total-note { font-size: 12px; color: #777; margin-top: 5px; }
 
-        /* 아이템 카드 */
-        .item-name { font-weight: bold; }
-        .item-price { color: #aaa; margin: 5px 0; }
+        /* 매칭 아이템 */
+        .item-row { display: flex; align-items: center; gap: 12px; padding: 12px; background: #151515; margin-bottom: 8px; border-radius: 10px; }
+        .item-row img { width: 66px; height: 66px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+        .item-name { font-weight: bold; font-size: 14px; }
+        .item-price { color: #aaa; margin: 4px 0; font-size: 13px; }
         .match-reason { color: #888; font-size: 12px; line-height: 1.5; margin: 4px 0 8px; }
-        .buy-link { color: white; text-decoration: underline; }
+        .buy-link { color: white; text-decoration: underline; font-size: 13px; }
         .item-row.sold-out { opacity: 0.45; }
-        .sold-out-tag { color: #ff6b6b; font-weight: normal; font-size: 13px; }
+        .sold-out-tag { color: #ff6b6b; font-weight: normal; font-size: 12px; }
         .buy-link.disabled { color: #666; text-decoration: none; cursor: not-allowed; }
-        .empty-msg { color: #777; padding: 20px 0; }
+        .empty-msg { color: #777; padding: 20px 0; font-size: 14px; }
 
-        /* 토스트 */
-        #toast { position: fixed; left: 50%; bottom: 40px; transform: translate(-50%, 10px); background: #fff; color: #000; padding: 12px 22px; border-radius: 999px; font-size: 14px; font-weight: bold; opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s; z-index: 1100; }
+        /* 토스트 — 하단 탭 위에 뜬다 */
+        #toast {
+            position: fixed; left: 50%; bottom: calc(78px + env(safe-area-inset-bottom));
+            transform: translate(-50%, 10px);
+            background: #fff; color: #000; padding: 11px 20px; border-radius: 999px;
+            font-size: 13px; font-weight: bold;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.25s, transform 0.25s;
+            z-index: 1100; max-width: 86vw; text-align: center;
+        }
         #toast.visible { opacity: 1; transform: translate(-50%, 0); }
 
-        @media (max-width: 768px) {
-            #detail-view { flex-direction: column; }
+        /* 마우스가 있는 환경에서만 hover 효과 */
+        @media (hover: hover) {
+            .card:hover { opacity: 0.85; }
+            .back-btn:hover, .logout-btn:hover { border-color: #666; color: #fff; }
+            .save-btn:hover { border-color: #666; }
         }
     </style>
 </head>
 <body>
 
+  <div class="app">
     <header>
-        <div class="logo">
-            <a href="{{ url_for('home') }}" style="text-decoration: none; color: white;">StyleMuse</a>
-        </div>
-
-        <div class="nav-links">
-            <span id="nav-explore" onclick="showFeed()">EXPLORE</span>
-            <span id="nav-saved" onclick="showSaved()">SAVED</span>
-            <span class="inert">OUTFITS</span>
-            <a href="{{ url_for('notices') }}" style="text-decoration: none; color: white; cursor: pointer; font-size: 1.2rem;">🔔</a>
-        </div>
+        <div class="logo"><a href="{{ url_for('home') }}">StyleMuse</a></div>
     </header>
 
     <!-- 칩은 renderFilterBar() 가 채운다. 어떤 태그가 열릴지는 불러온 데이터로 정해진다. -->
@@ -123,6 +256,110 @@
         </div>
     </div>
 
+    <div id="auth-view">
+        <div class="form-title" id="auth-title">로그인</div>
+        <div class="form-sub" id="auth-sub">저장한 코디는 계정에 남아 다른 기기에서도 볼 수 있어요.</div>
+
+        <div class="field">
+            <label for="auth-email">이메일</label>
+            <input type="email" id="auth-email" autocomplete="email" placeholder="you@example.com">
+        </div>
+        <div class="field">
+            <label for="auth-password">비밀번호</label>
+            <input type="password" id="auth-password" autocomplete="current-password" placeholder="6자 이상">
+        </div>
+
+        <button class="primary-btn" id="auth-submit" type="button" onclick="submitAuth()">로그인</button>
+        <div class="form-msg" id="auth-msg"></div>
+
+        <div class="form-switch">
+            <span id="auth-switch-text">아직 계정이 없으신가요?</span>
+            <button class="link-btn" type="button" onclick="toggleAuthMode()" id="auth-switch-btn">회원가입</button>
+        </div>
+    </div>
+
+    <div id="profile-view">
+        <div class="form-title">프로필</div>
+        <div class="form-sub">키·몸무게·평소 사이즈는 <strong>모두 선택 입력</strong>입니다. 비워둬도 서비스를 쓰는 데 문제없어요.</div>
+
+        <div class="profile-account" id="profile-account"></div>
+
+        <div class="field">
+            <label for="profile-height">키 <span class="unit">cm</span></label>
+            <input type="number" id="profile-height" inputmode="numeric" min="100" max="250" placeholder="예: 175">
+        </div>
+        <div class="field">
+            <label for="profile-weight">몸무게 <span class="unit">kg</span></label>
+            <input type="number" id="profile-weight" inputmode="numeric" min="30" max="200" placeholder="예: 68">
+        </div>
+        <div class="field">
+            <label>평소 사이즈</label>
+            <div class="field-hint">브랜드마다 표기가 달라요. 기억하시는 쪽으로만 골라도 됩니다.</div>
+            <div class="field-row">
+                <select id="profile-size-alpha">
+                    <option value="">알파벳</option>
+                    <option value="XS">XS</option>
+                    <option value="S">S</option>
+                    <option value="M">M</option>
+                    <option value="L">L</option>
+                    <option value="XL">XL</option>
+                    <option value="XXL">XXL</option>
+                </select>
+                <select id="profile-size-numeric">
+                    <option value="">숫자</option>
+                    <option value="90">90</option>
+                    <option value="95">95</option>
+                    <option value="100">100</option>
+                    <option value="105">105</option>
+                    <option value="110">110</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="field">
+            <label for="profile-fit">선호 핏</label>
+            <div class="field-hint">평소 즐겨 입는 핏이 있다면 알려주세요</div>
+            <select id="profile-fit">
+                <option value="">선택 안 함</option>
+                <option value="슬림핏">슬림핏</option>
+                <option value="레귤러핏">레귤러핏</option>
+                <option value="세미오버핏">세미오버핏</option>
+                <option value="오버핏">오버핏</option>
+                <option value="상관없음">상관없음</option>
+            </select>
+        </div>
+
+        <button class="primary-btn" id="profile-save" type="button" onclick="saveProfile()">저장</button>
+        <div class="form-msg" id="profile-msg"></div>
+
+        <!-- 일상적으로 쓰는 기능이 아니라 탭에 둘 위계가 아니다.
+             사진 업로드를 넣으면 개인정보처리방침이 법적 의무가 되므로 자리를 미리 잡아둔다. -->
+        <div class="profile-links">
+            <a class="profile-link" href="{{ url_for('notices') }}">공지사항 <span class="chev">›</span></a>
+            <span class="profile-link muted">개인정보처리방침 <span class="tag">준비 중</span></span>
+        </div>
+
+        <button class="logout-btn" type="button" onclick="signOut()">로그아웃</button>
+    </div>
+
+  </div><!-- /.app -->
+
+    <!-- 하단 고정 탭. 동작하지 않는 메뉴는 두지 않는다. -->
+    <nav class="tab-bar">
+        <button class="tab" id="tab-home" type="button" onclick="showFeed()" aria-label="홈">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.6 12 3l9 7.6V21a1 1 0 0 1-1 1h-5.5v-6.5h-5V22H4a1 1 0 0 1-1-1z"/></svg>
+            <span>홈</span>
+        </button>
+        <button class="tab" id="tab-saved" type="button" onclick="showSaved()" aria-label="저장함">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21S3.6 15.9 3.6 10.2A4.6 4.6 0 0 1 12 7.3a4.6 4.6 0 0 1 8.4 2.9C20.4 15.9 12 21 12 21z"/></svg>
+            <span>저장함</span>
+        </button>
+        <button class="tab" id="tab-profile" type="button" onclick="showProfile()" aria-label="프로필">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21.2A8 8 0 0 1 20 21.2z"/></svg>
+            <span>프로필</span>
+        </button>
+    </nav>
+
     <div id="toast" role="status" aria-live="polite"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -130,6 +367,12 @@
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
     let allLooks = [];
     let currentLook = null;
+
+    // 로그인한 사용자와 그 사용자가 저장한 코디.
+    // savedOrder 는 최근 저장이 앞이고, savedIds 는 하트 상태를 빠르게 보기 위한 것이다.
+    let currentUser = null;
+    let savedOrder = [];
+    let savedIds = new Set();
 
     // 'all' 이면 전체, 그 외에는 해당 style_tag 만 보여준다.
     let activeTag = 'all';
@@ -274,9 +517,17 @@
         document.getElementById('looks-container').style.display = name === 'feed' ? 'grid' : 'none';
         document.getElementById('saved-view').style.display = name === 'saved' ? 'block' : 'none';
         document.getElementById('detail-view').style.display = name === 'detail' ? 'flex' : 'none';
+        document.getElementById('auth-view').style.display = name === 'auth' ? 'block' : 'none';
+        document.getElementById('profile-view').style.display = name === 'profile' ? 'block' : 'none';
 
-        document.getElementById('nav-explore').classList.toggle('current', name === 'feed');
-        document.getElementById('nav-saved').classList.toggle('current', name === 'saved');
+        // 하단 탭 강조.
+        // 상세는 들어온 곳의 탭을 유지하고, 로그인 화면은 프로필 탭을 거쳐 들어오므로 묶는다.
+        const tab = name === 'detail' ? detailOrigin
+                  : name === 'auth'   ? 'profile'
+                  : name;
+        document.getElementById('tab-home').classList.toggle('active', tab === 'feed');
+        document.getElementById('tab-saved').classList.toggle('active', tab === 'saved');
+        document.getElementById('tab-profile').classList.toggle('active', tab === 'profile');
 
         window.scrollTo(0, 0);
     }
@@ -287,17 +538,36 @@
     }
 
     // --- 4. 저장함 ---
-    function showSaved() {
+    async function showSaved() {
         currentLook = null;
+
+        // 이미 알고 있는 목록으로 먼저 그리고 화면을 바꾼다.
+        // 조회를 기다렸다가 전환하면 그동안 이전 화면이 남아 멈춘 것처럼 보인다.
         renderSavedLooks();
         showScreen('saved');
+
+        if (!currentUser) return;
+
+        await refreshSavedLooks();
+        renderSavedLooks();
     }
 
     function renderSavedLooks() {
-        const savedIds = readSavedLooks();
         const body = document.getElementById('saved-body');
 
-        if (savedIds.length === 0) {
+        // 저장은 계정에 붙는다. 로그인하지 않으면 보여줄 것이 없다.
+        if (!currentUser) {
+            body.innerHTML = `
+                <div class="saved-empty">
+                    <div class="title">로그인하면 저장한 코디를 볼 수 있어요</div>
+                    <div class="sub">계정에 저장되므로 다른 기기에서도 이어서 볼 수 있어요</div>
+                    <button class="go-feed-btn" type="button" onclick="showAuth()">로그인하기</button>
+                </div>
+            `;
+            return;
+        }
+
+        if (savedOrder.length === 0) {
             body.innerHTML = `
                 <div class="saved-empty">
                     <div class="title">아직 저장한 코디가 없어요</div>
@@ -308,9 +578,9 @@
             return;
         }
 
-        // 저장 순서를 그대로 유지한다. 볼 수 없는 코디도 자리를 비우지 않는다.
-        // 저장은 "나중에 다시 보겠다"는 약속이므로 localStorage 에서 임의로 지우지 않는다.
-        body.innerHTML = `<div class="saved-grid">${savedIds.map(id => {
+        // 저장 순서(최근 저장이 위)를 유지한다. 볼 수 없는 코디도 자리를 비우지 않는다.
+        // 저장은 "나중에 다시 보겠다"는 약속이므로 임의로 지우지 않는다.
+        body.innerHTML = `<div class="saved-grid">${savedOrder.map(id => {
             const look = findLook(id);
             return look
                 ? lookCardHTML(look, 'saved')
@@ -386,55 +656,72 @@
     }
 
     // --- 4. 저장(하트) ---
-    // localStorage 는 시크릿 창이나 사이트 데이터 차단 시 접근만 해도 예외가 난다.
-    const SAVED_KEY = 'saved_looks';
+    // 저장은 saved_looks 테이블에 쌓인다. RLS 로 본인 행만 읽고 쓸 수 있다.
+    async function refreshSavedLooks() {
+        if (!currentUser) { savedOrder = []; savedIds = new Set(); return; }
 
-    function readSavedLooks() {
-        try {
-            const parsed = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]');
-            return Array.isArray(parsed) ? parsed : [];
-        } catch (_) {
-            return [];
-        }
-    }
+        const { data, error } = await supabaseClient
+            .from('saved_looks')
+            .select('look_id')
+            .order('created_at', { ascending: false });
 
-    function writeSavedLooks(ids) {
-        try {
-            localStorage.setItem(SAVED_KEY, JSON.stringify(ids));
-            return true;
-        } catch (_) {
-            return false;
-        }
+        if (error) { console.error(error); return; }
+
+        savedOrder = data.map(row => row.look_id);
+        savedIds = new Set(savedOrder);
     }
 
     function renderSaveButton() {
         const btn = document.getElementById('save-btn');
         if (!btn || !currentLook) return;
 
-        const saved = readSavedLooks().includes(currentLook.id);
+        const saved = savedIds.has(currentLook.id);
         btn.textContent = saved ? '♥' : '♡';
         btn.classList.toggle('saved', saved);
         btn.setAttribute('aria-pressed', String(saved));
         btn.setAttribute('aria-label', saved ? '저장 취소' : '저장');
     }
 
-    function toggleSave() {
+    async function toggleSave() {
         if (!currentLook) return;
 
-        const ids = readSavedLooks();
-        const index = ids.indexOf(currentLook.id);
-        const willSave = index === -1;
+        // 비로그인 상태에서는 저장하지 않고 로그인으로 안내한다.
+        if (!currentUser) {
+            showToast('로그인하면 저장할 수 있어요');
+            showAuth();
+            return;
+        }
 
-        if (willSave) ids.push(currentLook.id);
-        else ids.splice(index, 1);
+        const btn = document.getElementById('save-btn');
+        const willSave = !savedIds.has(currentLook.id);
+        const lookId = currentLook.id;
 
-        if (!writeSavedLooks(ids)) {
+        if (btn) btn.disabled = true;
+
+        const { error } = willSave
+            ? await supabaseClient.from('saved_looks')
+                .insert({ user_id: currentUser.id, look_id: lookId })
+            : await supabaseClient.from('saved_looks')
+                .delete().eq('user_id', currentUser.id).eq('look_id', lookId);
+
+        if (btn) btn.disabled = false;
+
+        if (error) {
+            console.error(error);
             showToast('저장할 수 없어요');
             return;
         }
 
+        if (willSave) {
+            savedIds.add(lookId);
+            savedOrder = [lookId, ...savedOrder.filter(id => id !== lookId)];
+            showToast('저장했어요');
+        } else {
+            savedIds.delete(lookId);
+            savedOrder = savedOrder.filter(id => id !== lookId);
+        }
+
         renderSaveButton();
-        if (willSave) showToast('저장했어요');
     }
 
     let toastTimer = null;
@@ -448,7 +735,225 @@
         toastTimer = setTimeout(() => el.classList.remove('visible'), 2000);
     }
 
-    // --- 6. 기타 기능 ---
+    // --- 6. 인증 ---
+    let authMode = 'signin'; // 'signin' | 'signup'
+
+    function showAuth() {
+        currentLook = null;
+        setAuthMessage('');
+        showScreen('auth');
+        document.getElementById('auth-email').focus();
+    }
+
+    function toggleAuthMode() {
+        authMode = authMode === 'signin' ? 'signup' : 'signin';
+        const signup = authMode === 'signup';
+
+        document.getElementById('auth-title').textContent = signup ? '회원가입' : '로그인';
+        document.getElementById('auth-sub').textContent = signup
+            ? '이메일과 비밀번호만 있으면 됩니다. 비밀번호는 Supabase가 해시로 보관해요.'
+            : '저장한 코디는 계정에 남아 다른 기기에서도 볼 수 있어요.';
+        document.getElementById('auth-submit').textContent = signup ? '가입하기' : '로그인';
+        document.getElementById('auth-switch-text').textContent = signup ? '이미 계정이 있으신가요?' : '아직 계정이 없으신가요?';
+        document.getElementById('auth-switch-btn').textContent = signup ? '로그인' : '회원가입';
+        document.getElementById('auth-password').setAttribute(
+            'autocomplete', signup ? 'new-password' : 'current-password');
+        setAuthMessage('');
+    }
+
+    function setAuthMessage(text, kind = '') {
+        const el = document.getElementById('auth-msg');
+        el.textContent = text;
+        el.className = `form-msg ${kind}`;
+    }
+
+    // Supabase 오류 문구가 영어라 자주 나오는 것만 우리말로 바꾼다.
+    function authErrorText(message) {
+        const m = (message || '').toLowerCase();
+        if (m.includes('invalid login credentials')) return '이메일 또는 비밀번호가 맞지 않습니다.';
+        if (m.includes('already registered') || m.includes('already been registered')) return '이미 가입된 이메일입니다. 로그인해주세요.';
+        if (m.includes('password should be at least')) return '비밀번호는 6자 이상이어야 합니다.';
+        if (m.includes('unable to validate email') || m.includes('invalid email')) return '이메일 형식을 확인해주세요.';
+        if (m.includes('email not confirmed')) return '이메일 확인이 필요합니다. 메일함을 확인해주세요.';
+        if (m.includes('rate limit') || m.includes('too many')) return '요청이 너무 잦습니다. 잠시 후 다시 시도해주세요.';
+        return message || '알 수 없는 오류가 발생했습니다.';
+    }
+
+    async function submitAuth() {
+        const email = document.getElementById('auth-email').value.trim();
+        const password = document.getElementById('auth-password').value;
+        const btn = document.getElementById('auth-submit');
+
+        if (!email || !password) {
+            setAuthMessage('이메일과 비밀번호를 입력해주세요.', 'error');
+            return;
+        }
+
+        btn.disabled = true;
+        setAuthMessage('처리 중...');
+
+        const { data, error } = authMode === 'signup'
+            ? await supabaseClient.auth.signUp({ email, password })
+            : await supabaseClient.auth.signInWithPassword({ email, password });
+
+        btn.disabled = false;
+
+        if (error) {
+            setAuthMessage(authErrorText(error.message), 'error');
+            return;
+        }
+
+        // 이메일 확인이 켜져 있으면 세션 없이 사용자만 돌아온다.
+        if (!data.session) {
+            setAuthMessage('확인 메일을 보냈습니다. 메일함에서 인증한 뒤 로그인해주세요.', 'ok');
+            return;
+        }
+
+        document.getElementById('auth-password').value = '';
+        setAuthMessage('');
+        // 이후 처리는 onAuthStateChange 가 맡는다.
+    }
+
+    async function signOut() {
+        const { error } = await supabaseClient.auth.signOut();
+        if (error) { showToast('로그아웃하지 못했어요'); return; }
+        showToast('로그아웃했어요');
+        showFeed();
+    }
+
+    // 로그인 상태가 바뀔 때마다 저장 목록과 헤더를 맞춘다.
+    async function applyAuthState(user) {
+        currentUser = user;
+
+        if (user) await migrateLocalSaves();
+        await refreshSavedLooks();
+
+        if (currentLook) renderSaveButton();
+    }
+
+    // --- 7. localStorage 저장 목록 이관 ---
+    // 원본은 지우지 않는다. 「자동 삭제를 하지 않는다」 원칙에 따라 플래그로만 재이관을 막는다.
+    const LOCAL_SAVED_KEY = 'saved_looks';
+    const MIGRATED_KEY = 'saved_looks_migrated_at';
+
+    function readLocalSaved() {
+        try {
+            if (localStorage.getItem(MIGRATED_KEY)) return null; // 이미 옮겼다
+            const parsed = JSON.parse(localStorage.getItem(LOCAL_SAVED_KEY) || '[]');
+            return Array.isArray(parsed) ? parsed.filter(Number.isInteger) : [];
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function markMigrated() {
+        try { localStorage.setItem(MIGRATED_KEY, new Date().toISOString()); } catch (_) { /* 무시 */ }
+    }
+
+    async function migrateLocalSaves() {
+        const ids = readLocalSaved();
+        if (ids === null) return;          // 이관 완료했거나 저장소를 못 읽는다
+        if (ids.length === 0) { markMigrated(); return; }
+
+        const rows = ids.map(look_id => ({ user_id: currentUser.id, look_id }));
+        const { error } = await supabaseClient
+            .from('saved_looks')
+            .upsert(rows, { onConflict: 'user_id,look_id', ignoreDuplicates: true });
+
+        if (error) {
+            // 한 건이라도 실패하면 전체가 막히므로 개별로 다시 시도한다.
+            let moved = 0;
+            for (const row of rows) {
+                const { error: rowError } = await supabaseClient
+                    .from('saved_looks')
+                    .upsert(row, { onConflict: 'user_id,look_id', ignoreDuplicates: true });
+                if (!rowError) moved++;
+                else console.error('이관 실패 look_id=' + row.look_id, rowError);
+            }
+            if (moved === 0) return;       // 전부 실패하면 플래그를 남기지 않아 다음에 다시 시도한다
+            markMigrated();
+            showToast(`저장한 코디 ${moved}개를 계정으로 옮겼어요`);
+            return;
+        }
+
+        markMigrated();
+        showToast(`저장한 코디 ${ids.length}개를 계정으로 옮겼어요`);
+    }
+
+    // --- 8. 프로필 ---
+    async function showProfile() {
+        if (!currentUser) { showAuth(); return; }
+
+        currentLook = null;
+        document.getElementById('profile-account').textContent = `로그인 계정: ${currentUser.email}`;
+        setProfileMessage('');
+        showScreen('profile');
+
+        const { data, error } = await supabaseClient
+            .from('user_profiles')
+            .select('height, weight, size_alpha, size_numeric, preferred_fit')
+            .eq('user_id', currentUser.id)
+            .maybeSingle();
+
+        if (error) { setProfileMessage('프로필을 불러오지 못했습니다.', 'error'); return; }
+
+        document.getElementById('profile-height').value = data?.height ?? '';
+        document.getElementById('profile-weight').value = data?.weight ?? '';
+        // 드롭다운은 값이 목록에 없으면 빈 선택으로 떨어진다. null 이면 빈 문자열로 맞춘다.
+        document.getElementById('profile-size-alpha').value = data?.size_alpha ?? '';
+        document.getElementById('profile-size-numeric').value = data?.size_numeric ?? '';
+        document.getElementById('profile-fit').value = data?.preferred_fit ?? '';
+    }
+
+    function setProfileMessage(text, kind = '') {
+        const el = document.getElementById('profile-msg');
+        el.textContent = text;
+        el.className = `form-msg ${kind}`;
+    }
+
+    // 빈 입력은 null 로 저장한다. 0 이나 빈 문자열로 두면 "입력했는데 0"과 구분되지 않는다.
+    const toIntOrNull = (v) => {
+        const t = String(v ?? '').trim();
+        if (t === '') return null;
+        const n = Number(t);
+        return Number.isFinite(n) ? Math.round(n) : null;
+    };
+    const toTextOrNull = (v) => {
+        const t = String(v ?? '').trim();
+        return t === '' ? null : t;
+    };
+
+    async function saveProfile() {
+        if (!currentUser) { showAuth(); return; }
+
+        const btn = document.getElementById('profile-save');
+        btn.disabled = true;
+        setProfileMessage('저장 중...');
+
+        // 행이 없으면 만들고 있으면 갱신한다. 가입 시 트리거로 미리 만들지 않는다.
+        const { error } = await supabaseClient
+            .from('user_profiles')
+            .upsert({
+                user_id: currentUser.id,
+                height: toIntOrNull(document.getElementById('profile-height').value),
+                weight: toIntOrNull(document.getElementById('profile-weight').value),
+                size_alpha: toTextOrNull(document.getElementById('profile-size-alpha').value),
+                size_numeric: toIntOrNull(document.getElementById('profile-size-numeric').value),
+                preferred_fit: toTextOrNull(document.getElementById('profile-fit').value),
+            }, { onConflict: 'user_id' });
+
+        btn.disabled = false;
+
+        if (error) {
+            console.error(error);
+            setProfileMessage('저장하지 못했습니다: ' + error.message, 'error');
+            return;
+        }
+
+        setProfileMessage('저장했습니다.', 'ok');
+    }
+
+    // --- 9. 기타 기능 ---
     // 들어온 화면으로 돌아간다. 저장함에서 들어왔는데 피드로 보내면 보던 자리를 잃는다.
     function goBack() {
         currentLook = null;
@@ -462,7 +967,28 @@
         renderLooks(visibleLooks());
     }
 
-    loadLooks();
+    // --- 시작 ---
+    // 세션 복원과 코디 로드를 함께 시작한다. 저장 목록은 둘 다 있어야 그릴 수 있다.
+    async function start() {
+        // 로그인/로그아웃, 토큰 갱신, 다른 탭에서의 상태 변경까지 여기로 들어온다.
+        supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            const user = session?.user ?? null;
+            const changed = (currentUser?.id ?? null) !== (user?.id ?? null);
+
+            await applyAuthState(user);
+
+            if (!changed) return;
+            if (event === 'SIGNED_IN') showFeed();
+            // 저장함을 보고 있었다면 목록을 다시 그린다.
+            if (document.getElementById('saved-view').style.display === 'block') renderSavedLooks();
+        });
+
+        const { data } = await supabaseClient.auth.getSession();
+        await applyAuthState(data.session?.user ?? null);
+        await loadLooks();
+    }
+
+    start();
 </script>
 </body>
 </html>
