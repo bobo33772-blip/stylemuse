@@ -8,25 +8,29 @@
 
 **아래 조치를 끝내기 전에는 외부 URL로 배포하지 않는다.**
 
-- [ ] `pinterest_looks`, `looks_items_match`, `musinsa_items`에 RLS 적용
+- [x] **유저 테이블 RLS 적용 완료** — `user_profiles`, `saved_looks` (2026.09.14)
+- [ ] **기존 3개 테이블 RLS 미적용** — `pinterest_looks`, `looks_items_match`, `musinsa_items`
 - [ ] anon 키는 SELECT만 허용
 - [ ] `/admin`에 Supabase Auth 기반 인증 추가
 - [ ] 쓰기 작업은 인증된 사용자 또는 Edge Function으로 제한
+- [ ] 데모 계정 삭제 (`auth.users`에 시연용 계정 1건이 남아 있다)
 
 ### 현재 상태
 
-**publishable 키로 누구나 UPDATE·DELETE가 가능한 상태다.**
+| 테이블 | RLS | 정책 | 비고 |
+|---|---|---|---|
+| `user_profiles` | ✅ on | 4 | `auth.uid() = user_id` — SELECT·INSERT·UPDATE·DELETE |
+| `saved_looks` | ✅ on | 4 | `auth.uid() = user_id` — SELECT·INSERT·UPDATE·DELETE |
+| `search_cache` | ✅ on | 0 | 정책 없음 = Edge Function 전용 |
+| `pinterest_looks` | ❌ off | 0 | **조치 필요** |
+| `looks_items_match` | ❌ off | 0 | **조치 필요** |
+| `musinsa_items` | ❌ off | 0 | **조치 필요** |
 
-세 테이블 모두 RLS가 꺼져 있고(`relrowsecurity = false`, 정책 0개), publishable 키는
-`static/config.js`에 담겨 모든 방문자 브라우저로 전송된다. `/admin`에도 인증이 없다.
-즉 키를 확인한 누구나 코디·상품·매칭을 수정하거나 삭제할 수 있다.
+**유저 데이터는 보호된다.** 만들 때부터 RLS를 켰고, 사용자 둘을 만들어 서로의 행이 보이지 않는 것과 남의 `user_id`로 쓰기가 거부되는 것을 실제로 확인했다.
 
-| 테이블 | RLS | 정책 수 |
-|---|---|---|
-| `pinterest_looks` | ❌ off | 0 |
-| `looks_items_match` | ❌ off | 0 |
-| `musinsa_items` | ❌ off | 0 |
-| `search_cache` | ✅ on | 0 (Edge Function 전용) |
+**코디·상품·매칭 세 테이블은 여전히 publishable 키로 누구나 UPDATE·DELETE가 가능하다.** 그 키는 `static/config.js`에 담겨 모든 방문자 브라우저로 전송되고, `/admin`에도 인증이 없다.
+
+2026.09.14에 Supabase Auth를 도입했으므로 `/admin` 인증에 쓸 기반은 생겼다. 남은 작업은 세 테이블에 읽기 전용 정책을 걸고 운영 화면의 쓰기 경로를 인증 뒤로 옮기는 것이다.
 
 ### 왜 미뤘는가 (2026-09-09 결정)
 
