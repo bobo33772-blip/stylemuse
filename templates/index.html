@@ -204,6 +204,41 @@
         .buy-link.disabled { color: #666; text-decoration: none; cursor: not-allowed; }
         .empty-msg { color: #777; padding: 20px 0; font-size: 14px; }
 
+        /* 동의 화면 */
+        #consent-view { display: none; padding: 28px 20px 20px; }
+        .consent-all { display: flex; align-items: center; gap: 11px; padding: 15px 14px; background: #161616; border: 1px solid #262626; border-radius: 10px; cursor: pointer; margin-bottom: 8px; }
+        .consent-all .label { font-size: 15px; font-weight: bold; }
+        .consent-row { display: flex; align-items: center; gap: 11px; padding: 13px 14px; }
+        .consent-row .label { flex: 1; font-size: 14px; color: #ddd; }
+        .consent-row .req { font-size: 12px; color: #8ab4ff; margin-right: 4px; }
+        .consent-row .opt { font-size: 12px; color: #777; margin-right: 4px; }
+        .consent-row a { color: #777; font-size: 12px; text-decoration: underline; flex-shrink: 0; }
+        .consent-row.changed { background: #1a1510; border-radius: 8px; }
+        .consent-row.changed .label::after { content: ' (변경됨)'; color: #f59e0b; font-size: 12px; }
+        input[type="checkbox"] { width: 20px; height: 20px; accent-color: #fff; flex-shrink: 0; margin: 0; }
+        .consent-actions { display: flex; gap: 10px; margin-top: 22px; }
+        .consent-actions .primary-btn { margin-top: 0; }
+        .ghost-btn { flex: 0 0 34%; background: none; border: 1px solid #2a2a2a; color: #aaa; border-radius: 7px; font-family: inherit; font-size: 14px; cursor: pointer; }
+
+        /* 푸터 — 법정 상시 게재. 하단 탭과 겹치지 않도록 .app 안에 둔다. */
+        .legal-footer { padding: 26px 16px 20px; border-top: 1px solid #1c1c1c; margin-top: 10px; text-align: center; }
+        .legal-footer a { color: #999; font-size: 12px; text-decoration: none; }
+        .legal-footer a.strong { color: #ddd; font-weight: bold; }
+        .legal-footer .sep { color: #333; margin: 0 9px; font-size: 12px; }
+        .legal-footer .owner { color: #555; font-size: 11px; margin-top: 10px; line-height: 1.7; }
+
+        /* 탈퇴 */
+        .withdraw-btn { background: none; border: none; color: #666; font-family: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; display: block; margin: 18px auto 0; padding: 6px; }
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.72); display: none; align-items: center; justify-content: center; z-index: 1200; padding: 24px; }
+        .modal-backdrop.visible { display: flex; }
+        .modal { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 14px; width: 100%; max-width: 320px; overflow: hidden; }
+        .modal-body { padding: 26px 20px; text-align: center; font-size: 14px; line-height: 1.75; color: #eee; white-space: pre-line; }
+        .modal-actions { display: flex; border-top: 1px solid #2a2a2a; }
+        .modal-actions button { flex: 1; background: none; border: none; padding: 15px 0; font-family: inherit; font-size: 14px; cursor: pointer; }
+        .modal-actions .danger { color: #ff6b6b; border-right: 1px solid #2a2a2a; }
+        .modal-actions .cancel { color: #ddd; font-weight: bold; }
+        .modal-actions button:disabled { opacity: 0.5; cursor: progress; }
+
         /* 토스트 — 하단 탭 위에 뜬다 */
         #toast {
             position: fixed; left: 50%; bottom: calc(78px + env(safe-area-inset-bottom));
@@ -336,13 +371,53 @@
              사진 업로드를 넣으면 개인정보처리방침이 법적 의무가 되므로 자리를 미리 잡아둔다. -->
         <div class="profile-links">
             <a class="profile-link" href="{{ url_for('notices') }}">공지사항 <span class="chev">›</span></a>
-            <span class="profile-link muted">개인정보처리방침 <span class="tag">준비 중</span></span>
+            <a class="profile-link" href="{{ url_for('terms') }}">이용약관 <span class="chev">›</span></a>
+            <a class="profile-link" href="{{ url_for('privacy') }}">개인정보처리방침 <span class="chev">›</span></a>
         </div>
 
         <button class="logout-btn" type="button" onclick="signOut()">로그아웃</button>
+
+        <!-- 눈에 띄지 않게 최하단에 둔다 -->
+        <button class="withdraw-btn" type="button" onclick="openWithdrawModal()">회원 탈퇴</button>
     </div>
 
+    <div id="consent-view">
+        <div class="form-title">약관에 동의해주세요</div>
+        <div class="form-sub" id="consent-sub">서비스를 이용하려면 아래 필수 항목에 동의가 필요합니다.</div>
+
+        <label class="consent-all">
+            <input type="checkbox" id="consent-all" onchange="onConsentAllToggle()">
+            <span class="label">전체 동의</span>
+        </label>
+
+        <div id="consent-rows"></div>
+
+        <div class="consent-actions">
+            <button class="ghost-btn" type="button" onclick="cancelConsent()">취소</button>
+            <button class="primary-btn" id="consent-submit" type="button" onclick="submitConsent()" disabled>동의하고 시작하기</button>
+        </div>
+        <div class="form-msg" id="consent-msg"></div>
+    </div>
+
+    <!-- 개인정보 보호법 제30조: 방침을 첫 화면 또는 연결된 화면에 지속 게재한다. -->
+    <footer class="legal-footer">
+        <a class="strong" href="{{ url_for('privacy') }}">개인정보처리방침</a>
+        <span class="sep">|</span>
+        <a href="{{ url_for('terms') }}">이용약관</a>
+        <div class="owner">운영자 김보성 · bobo33772@gmail.com</div>
+    </footer>
   </div><!-- /.app -->
+
+    <div class="modal-backdrop" id="withdraw-modal" role="dialog" aria-modal="true" aria-labelledby="withdraw-text">
+        <div class="modal">
+            <div class="modal-body" id="withdraw-text">정말 탈퇴할까요?
+계정이 삭제되면 되돌릴 수 없어요.</div>
+            <div class="modal-actions">
+                <button class="danger" id="withdraw-yes" type="button" onclick="confirmWithdraw()">네, 탈퇴할게요</button>
+                <button class="cancel" type="button" onclick="closeWithdrawModal()">아니요</button>
+            </div>
+        </div>
+    </div>
 
     <!-- 하단 고정 탭. 동작하지 않는 메뉴는 두지 않는다. -->
     <nav class="tab-bar">
@@ -519,6 +594,10 @@
         document.getElementById('detail-view').style.display = name === 'detail' ? 'flex' : 'none';
         document.getElementById('auth-view').style.display = name === 'auth' ? 'block' : 'none';
         document.getElementById('profile-view').style.display = name === 'profile' ? 'block' : 'none';
+        document.getElementById('consent-view').style.display = name === 'consent' ? 'block' : 'none';
+
+        // 동의 화면에서는 탭으로 빠져나갈 수 없게 한다. 필수 동의 전에는 메인에 들어갈 수 없다.
+        document.querySelector('.tab-bar').style.display = name === 'consent' ? 'none' : 'flex';
 
         // 하단 탭 강조.
         // 상세는 들어온 곳의 탭을 유지하고, 로그인 화면은 프로필 탭을 거쳐 들어오므로 묶는다.
@@ -825,10 +904,184 @@
     async function applyAuthState(user) {
         currentUser = user;
 
+        await loadAgreements();
         if (user) await migrateLocalSaves();
         await refreshSavedLooks();
 
         if (currentLook) renderSaveButton();
+    }
+
+    // 로그인했는데 필수 동의가 빠져 있으면 동의 화면으로 보낸다.
+    // 동의 화면을 벗어났다가 다시 들어와도 같은 판정이라 우회할 수 없다.
+    function guardConsent() {
+        if (!currentUser || !needsConsent()) return false;
+        showConsent();
+        return true;
+    }
+
+    // --- 6-2. 약관 동의 ---
+    // 문서 버전이 오르면 해당 항목만 다시 받는다. 버전은 문서 상단 표기와 같아야 한다.
+    const AGREEMENTS = [
+        { type: 'terms',   version: '1.0', label: '이용약관 동의',          required: true,  href: '{{ url_for("terms") }}' },
+        { type: 'privacy', version: '1.0', label: '개인정보처리방침 동의',  required: true,  href: '{{ url_for("privacy") }}' },
+    ];
+
+    let agreementState = [];   // [{ ...AGREEMENTS 항목, checked, stale }]
+
+    // 저장된 동의를 최신 버전과 대조한다.
+    async function loadAgreements() {
+        if (!currentUser) { agreementState = []; return; }
+
+        const { data, error } = await supabaseClient
+            .from('user_agreements')
+            .select('agreement_type, version, agreed');
+
+        if (error) {
+            console.error(error);
+            agreementState = [];
+            return;
+        }
+
+        const saved = new Map(data.map(row => [row.agreement_type, row]));
+
+        agreementState = AGREEMENTS.map(item => {
+            const row = saved.get(item.type);
+            const upToDate = !!row && row.agreed === true && row.version === item.version;
+            return {
+                ...item,
+                // 버전이 바뀐 항목만 체크를 풀고, 나머지는 체크된 채로 둔다.
+                checked: upToDate,
+                stale: !!row && row.version !== item.version,
+            };
+        });
+    }
+
+    const needsConsent = () => agreementState.some(a => a.required && !a.checked);
+
+    function renderConsent() {
+        const changedCount = agreementState.filter(a => a.stale).length;
+        document.getElementById('consent-sub').textContent = changedCount > 0
+            ? '약관이 변경되었습니다. 변경된 항목에 다시 동의해주세요.'
+            : '서비스를 이용하려면 아래 필수 항목에 동의가 필요합니다.';
+
+        document.getElementById('consent-rows').innerHTML = agreementState.map((a, i) => `
+            <div class="consent-row${a.stale ? ' changed' : ''}">
+                <input type="checkbox" id="consent-${i}" ${a.checked ? 'checked' : ''} onchange="onConsentToggle(${i})">
+                <label class="label" for="consent-${i}">
+                    <span class="${a.required ? 'req' : 'opt'}">[${a.required ? '필수' : '선택'}]</span>${esc(a.label)}
+                </label>
+                <a href="${esc(a.href)}">전문 보기</a>
+            </div>
+        `).join('');
+
+        syncConsentControls();
+    }
+
+    function syncConsentControls() {
+        document.getElementById('consent-all').checked =
+            agreementState.length > 0 && agreementState.every(a => a.checked);
+        // 필수 항목이 모두 체크됐을 때만 활성화한다. 선택 항목은 가입을 막지 않는다.
+        document.getElementById('consent-submit').disabled = needsConsent();
+    }
+
+    function onConsentToggle(index) {
+        agreementState[index].checked = document.getElementById(`consent-${index}`).checked;
+        syncConsentControls();
+    }
+
+    function onConsentAllToggle() {
+        const on = document.getElementById('consent-all').checked;
+        agreementState.forEach((a, i) => {
+            a.checked = on;
+            const el = document.getElementById(`consent-${i}`);
+            if (el) el.checked = on;
+        });
+        syncConsentControls();
+    }
+
+    function showConsent() {
+        setConsentMessage('');
+        renderConsent();
+        showScreen('consent');
+    }
+
+    function setConsentMessage(text, kind = '') {
+        const el = document.getElementById('consent-msg');
+        el.textContent = text;
+        el.className = `form-msg ${kind}`;
+    }
+
+    async function submitConsent() {
+        if (!currentUser || needsConsent()) return;
+
+        const btn = document.getElementById('consent-submit');
+        btn.disabled = true;
+        setConsentMessage('저장 중...');
+
+        try {
+            const rows = agreementState.map(a => ({
+                user_id: currentUser.id,
+                agreement_type: a.type,
+                version: a.version,
+                agreed: a.checked,
+                agreed_at: new Date().toISOString(),
+            }));
+
+            const { error } = await supabaseClient
+                .from('user_agreements')
+                .upsert(rows, { onConflict: 'user_id,agreement_type' });
+
+            if (error) throw new Error(error.message);
+
+            await loadAgreements();
+            setConsentMessage('');
+            showFeed();
+        } catch (err) {
+            // 실패해도 버튼이 잠긴 채 멈추지 않도록 반드시 되돌린다.
+            console.error(err);
+            setConsentMessage('동의를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.', 'error');
+        } finally {
+            btn.disabled = needsConsent();
+        }
+    }
+
+    // 동의하지 않고 나가면 로그인 상태를 유지할 이유가 없다.
+    async function cancelConsent() {
+        await supabaseClient.auth.signOut();
+        showFeed();
+    }
+
+    // --- 6-3. 회원 탈퇴 ---
+    function openWithdrawModal() {
+        if (!currentUser) { showAuth(); return; }
+        document.getElementById('withdraw-modal').classList.add('visible');
+    }
+
+    function closeWithdrawModal() {
+        document.getElementById('withdraw-modal').classList.remove('visible');
+    }
+
+    async function confirmWithdraw() {
+        const btn = document.getElementById('withdraw-yes');
+        btn.disabled = true;
+
+        try {
+            // auth.users 삭제에는 secret 키가 필요해 서버 함수를 부른다.
+            // 함수 안에서 auth.uid() 로 본인만 지우도록 막혀 있다.
+            const { error } = await supabaseClient.rpc('delete_own_account');
+            if (error) throw new Error(error.message);
+
+            closeWithdrawModal();
+            await supabaseClient.auth.signOut();
+            showToast('탈퇴가 완료되었어요');
+            showFeed();
+        } catch (err) {
+            console.error(err);
+            closeWithdrawModal();
+            showToast('탈퇴하지 못했어요. 잠시 후 다시 시도해주세요.');
+        } finally {
+            btn.disabled = false;
+        }
     }
 
     // --- 7. localStorage 저장 목록 이관 ---
@@ -978,7 +1231,10 @@
             await applyAuthState(user);
 
             if (!changed) return;
-            if (event === 'SIGNED_IN') showFeed();
+            if (event === 'SIGNED_IN') {
+                if (guardConsent()) return;
+                showFeed();
+            }
             // 저장함을 보고 있었다면 목록을 다시 그린다.
             if (document.getElementById('saved-view').style.display === 'block') renderSavedLooks();
         });
@@ -986,6 +1242,10 @@
         const { data } = await supabaseClient.auth.getSession();
         await applyAuthState(data.session?.user ?? null);
         await loadLooks();
+
+        // 세션이 복원된 경우에도 동의 여부를 확인한다.
+        // loadLooks() 가 끝에서 피드를 보여주므로 그 뒤에 덮어써야 한다.
+        guardConsent();
     }
 
     start();

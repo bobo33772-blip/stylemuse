@@ -12,6 +12,16 @@ def home():
 def notices():
     return render_template('notice.html')
 
+# 이용약관 전문
+@app.route('/terms')
+def terms():
+    return render_template('terms.html')
+
+# 개인정보처리방침 전문 (개인정보 보호법 제30조에 따라 상시 게재)
+@app.route('/privacy')
+def privacy():
+    return render_template('privacy.html')
+
 # 관리자 업로드 페이지 (코디 사진 업로드 + AI 분석)
 @app.route('/admin')
 def admin_upload():
