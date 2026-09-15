@@ -6,39 +6,66 @@
 
 ## ⚠️ 배포 전 필수 조치
 
-**아래 조치를 끝내기 전에는 외부 URL로 배포하지 않는다.**
+> **2026.09.15 — 해소 완료.** 서비스 성격을 "실제 서비스"로 바꾸면서
+> 기존 보류 근거("학습 목적 개인 프로젝트, 외부 배포 계획 없음")가 무효가 되었고,
+> 같은 날 조치를 끝냈다.
 
-- [x] **유저 테이블 RLS 적용 완료** — `user_profiles`, `saved_looks` (2026.09.14)
-- [ ] **기존 3개 테이블 RLS 미적용** — `pinterest_looks`, `looks_items_match`, `musinsa_items`
-- [ ] anon 키는 SELECT만 허용
-- [ ] `/admin`에 Supabase Auth 기반 인증 추가
-- [ ] 쓰기 작업은 인증된 사용자 또는 Edge Function으로 제한
-- [ ] 데모 계정 삭제 (`auth.users`에 시연용 계정 1건이 남아 있다)
+### 완료
 
-### 현재 상태
+- [x] `pinterest_looks`, `looks_items_match`, `musinsa_items`에 RLS 적용
+- [x] anon 키는 SELECT만 허용 (INSERT·UPDATE·DELETE 전면 차단)
+- [x] `/admin`에 Supabase Auth 기반 인증 추가
+- [x] 쓰기 작업은 운영자로 제한
+- [x] `analyze-look` Edge Function 호출도 운영자로 제한
+- [x] 유저 테이블 RLS (`user_profiles`, `saved_looks`, `user_agreements`)
 
-| 테이블 | RLS | 정책 | 비고 |
-|---|---|---|---|
-| `user_profiles` | ✅ on | 4 | `auth.uid() = user_id` — SELECT·INSERT·UPDATE·DELETE |
-| `saved_looks` | ✅ on | 4 | `auth.uid() = user_id` — SELECT·INSERT·UPDATE·DELETE |
-| `search_cache` | ✅ on | 0 | 정책 없음 = Edge Function 전용 |
-| `pinterest_looks` | ❌ off | 0 | **조치 필요** |
-| `looks_items_match` | ❌ off | 0 | **조치 필요** |
-| `musinsa_items` | ❌ off | 0 | **조치 필요** |
+### 남은 항목
 
-**유저 데이터는 보호된다.** 만들 때부터 RLS를 켰고, 사용자 둘을 만들어 서로의 행이 보이지 않는 것과 남의 `user_id`로 쓰기가 거부되는 것을 실제로 확인했다.
+- [ ] **데모 계정 삭제** — `stylemuse.demo@gmail.com` (발표 시연용). 시연이 끝나면 지운다
+- [ ] **HTTPS 확인** — 배포 후 실제 도메인에서 확인
+- [ ] 내부 관리계획 문서 수립, 접근권한 정기 점검 절차
 
-**코디·상품·매칭 세 테이블은 여전히 publishable 키로 누구나 UPDATE·DELETE가 가능하다.** 그 키는 `static/config.js`에 담겨 모든 방문자 브라우저로 전송되고, `/admin`에도 인증이 없다.
+### 현재 RLS 상태
 
-2026.09.14에 Supabase Auth를 도입했으므로 `/admin` 인증에 쓸 기반은 생겼다. 남은 작업은 세 테이블에 읽기 전용 정책을 걸고 운영 화면의 쓰기 경로를 인증 뒤로 옮기는 것이다.
+| 테이블 | 개인정보 | RLS | 읽기 | 쓰기 |
+|---|---|---|---|---|
+| `user_profiles` | ✅ | ✅ | 본인만 | 본인만 |
+| `saved_looks` | ✅ | ✅ | 본인만 | 본인만 |
+| `user_agreements` | ✅ | ✅ | 본인만 | 본인만 |
+| `pinterest_looks` | ❌ | ✅ | 공개 코디 + 운영자 | 운영자만 |
+| `looks_items_match` | ❌ | ✅ | 공개 코디의 매칭만 | 운영자만 |
+| `musinsa_items` | ❌ | ✅ | 전체 | 운영자만 |
+| `admin_users` | ❌ | ✅ | 정책 없음 = API 접근 불가 | SQL로만 |
+| `search_cache` · `look_save_stats` | ❌ | ✅ | 정책 없음 = 서버 전용 | 서버 전용 |
 
-### 왜 미뤘는가 (2026-09-09 결정)
+**RLS 가 꺼진 테이블은 없다.**
 
-- 프로토타입 단계에서는 로컬 또는 화면 공유로만 시연한다
-- 외부 URL 배포 계획이 없다
-- 지금은 매칭 근거 데이터를 채우는 것이 우선순위다
+### 관리자 권한
 
-의도적으로 미룬 것이며, 배포 계획이 생기는 시점에 **가장 먼저** 해소해야 한다.
+운영자는 `admin_users` 테이블로 관리한다. 이 테이블은 RLS 를 켜고 **정책을 하나도 두지 않아** API 로는 조회·추가·삭제가 모두 막혀 있다. 관리자 지정은 SQL 로만 가능하다.
+
+`user_profiles.is_admin` 컬럼을 쓰지 않은 이유: 그 테이블에는 "본인 행은 본인이 수정한다" 정책이 있어 **이용자가 스스로를 운영자로 올릴 수 있다.** 컬럼 단위 권한 회수로 막을 수는 있으나, 보호막이 정책과 다른 곳에 숨어 나중에 `grant` 한 줄로 조용히 열릴 수 있다.
+
+```bash
+# 운영자 지정 (SQL 로만 가능)
+.\.tools\supabase.exe db query --linked   "insert into admin_users (user_id, note) select id, '운영자' from auth.users where email = '<주소>'"
+```
+
+---
+
+## ⚖️ 법률 문서
+
+`/terms`(이용약관), `/privacy`(개인정보처리방침) — 각 v1.0, 2026.09.15 시행.
+
+> **이 문서들은 법률 전문가의 검토를 받지 않은 초안입니다.**
+> 실제 서비스 운영 전 전문가 검토를 권장합니다.
+> 본문에서 확인이 필요한 부분은 `[확인 필요]`로 표시해 두었습니다.
+
+작성 시 지킨 것:
+
+- 수집 항목은 **실제 테이블 컬럼과 코드를 확인해** 작성했다. 추측하지 않았다
+- 미구현 기능(전신 사진 업로드, Vertex AI 이전)은 **"도입 예정"으로 명시**하고 현재 수집·전송하지 않음을 밝혔다
+- 안전성 확보조치는 **현재 상태를 있는 그대로** 적었다. 적용되지 않은 사항도 함께 기재했다
 
 ---
 
