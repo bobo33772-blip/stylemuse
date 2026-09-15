@@ -292,16 +292,50 @@ async function resolveItem(
   return { item, fromCache: false, key, notes };
 }
 
+/**
+ * 호출자가 운영자인지 확인한다.
+ * Authorization 헤더의 사용자 토큰으로 admin_users 를 조회한다.
+ * 그 테이블은 RLS 로 잠겨 있으므로 service role 로 확인한다.
+ */
+// deno-lint-ignore no-explicit-any
+async function isAdminRequest(ctx: any, req: Request): Promise<boolean> {
+  const header = req.headers.get("Authorization") ?? "";
+  const token = header.replace(/^Bearer\s+/i, "").trim();
+  if (!token) return false;
+
+  const { data, error } = await ctx.supabaseAdmin.auth.getUser(token);
+  if (error || !data?.user) return false;
+
+  const { data: row } = await ctx.supabaseAdmin
+    .from("admin_users")
+    .select("user_id")
+    .eq("user_id", data.user.id)
+    .maybeSingle();
+
+  return !!row;
+}
+
 export default {
-  // 갤러리(브라우저)는 publishable/anon 키로, 서버 배치는 secret 키로 호출한다.
-  // "user" 모드는 넣지 않는다: 이 프로젝트는 legacy anon JWT(kid 없음)를 쓰기 때문에
-  // Authorization 헤더를 사용자 JWT로 검증하려다 INVALID_JWT 로 거부된다.
+  // publishable 키만으로도 여기까지는 들어온다. 그 뒤 운영자인지를 직접 확인한다.
   fetch: withSupabase({ auth: ["publishable", "secret"] }, async (req, ctx) => {
     if (!OPENAI_API_KEY || !SERPAPI_KEY) {
       return Response.json(
         { error: "OPENAI_API_KEY / SERPAPI_KEY 시크릿이 설정되지 않았습니다." },
         { status: 500 },
       );
+    }
+
+    // 이 함수는 OpenAI·SerpApi 를 호출하므로 호출 자체가 비용이다.
+    // 키가 서버에 있어도 호출 경로가 열려 있으면 결과는 키가 새어나간 것과 같다.
+    // secret 키로 온 서버 호출은 통과시키고, 그 외에는 운영자 여부를 확인한다.
+    if (ctx.authMode !== "secret") {
+      const allowed = await isAdminRequest(ctx, req);
+      if (!allowed) {
+        return Response.json(
+          { error: "운영자만 사용할 수 있습니다." },
+          { status: 403 },
+        );
+      }
     }
 
     let body: {

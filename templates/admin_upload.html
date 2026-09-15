@@ -53,8 +53,13 @@
     </style>
 </head>
 <body>
+    <!-- 관리자 확인 전에는 아무것도 보여주지 않는다.
+         화면을 먼저 그리고 나중에 가리면 그 사이에 내용이 노출된다. -->
+    <div id="gate">확인 중...</div>
+
+    <div id="admin-body" hidden>
     <h1>AI Fashion Hunter</h1>
-    <p><a href="{{ url_for('home') }}">← 갤러리로</a></p>
+    <p><a href="{{ url_for('home') }}">← 갤러리로</a> · <span id="admin-who"></span></p>
 
     <div class="upload-box" onclick="document.getElementById('fileInput').click()">
         <p>클릭하여 코디 사진 업로드</p>
@@ -93,6 +98,7 @@
 
         <div id="editor" hidden></div>
     </section>
+    </div><!-- /#admin-body -->
 
     <script>
         // CDN 전역 `supabase` 를 가리지 않도록 클라이언트는 다른 이름으로 받는다.
@@ -431,7 +437,37 @@
             }
         }
 
-        loadCuration();
+        // ============================================================
+        // 관리자 확인
+        // ============================================================
+        // 화면 차단은 편의일 뿐이고 실제 방어선은 RLS 다.
+        // 관리자가 아닌 사람이 이 페이지를 강제로 열어도 DB 가 쓰기를 거부한다.
+        async function guardAdmin() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+
+            if (!session) {
+                location.replace('{{ url_for("home") }}');
+                return false;
+            }
+
+            // admin_users 는 RLS 로 잠겨 있어 직접 조회할 수 없다. 판별은 서버 함수가 한다.
+            const { data: isAdmin, error } = await supabaseClient.rpc('is_admin');
+
+            if (error || isAdmin !== true) {
+                if (error) console.error(error);
+                location.replace('{{ url_for("home") }}');
+                return false;
+            }
+
+            document.getElementById('admin-who').textContent = session.user.email;
+            document.getElementById('gate').hidden = true;
+            document.getElementById('admin-body').hidden = false;
+            return true;
+        }
+
+        (async () => {
+            if (await guardAdmin()) loadCuration();
+        })();
     </script>
 </body>
 </html>
