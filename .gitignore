@@ -5,3 +5,4 @@ venv2
 .tools
 __pycache__/
 supabase/.temp/
+set_admin_password.py
