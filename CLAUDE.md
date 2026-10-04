@@ -34,7 +34,7 @@
   재검토 시점: 인터뷰 종료 후 문제 정의가 확정되면 재구축 검토
 
 ## 기술 스택
-Flask(HTML 서빙만) + Supabase(Postgres, Edge Functions) + 바닐라 JS
+Flask(HTML 서빙만) + Supabase(Postgres, Auth, Edge Functions) + 바닐라 JS
 상태 관리 라이브러리 없음. 전역 변수와 DOM 렌더링
 
 ## 스킬 설정
@@ -42,9 +42,14 @@ Flask(HTML 서빙만) + Supabase(Postgres, Edge Functions) + 바닐라 JS
 자동 발동 4개, 수동 호출 7개, 차단 30개.
 설계 결정이 문서로 확정되어 있어 디자인·미학 계열 스킬을 차단했다.
 
-## 배포 전 필수 조치
-- pinterest_looks, looks_items_match, musinsa_items에 RLS 적용
-- anon 키는 SELECT만 허용
-- /admin에 Supabase Auth 기반 인증 추가
-- 쓰기는 인증된 사용자 또는 Edge Function으로 제한
-현재 publishable 키로 누구나 UPDATE·DELETE가 가능한 상태다.
+## 보안 상태 (2026.09.15 배포 전 필수 조치 완료)
+- 모든 테이블에 RLS를 적용했다. 예외가 없다
+- anon(publishable) 키는 SELECT만 가능하다. INSERT·UPDATE·DELETE는 전면 차단
+- /admin은 Supabase Auth 로그인 + admin_users에 등록된 운영자만 쓴다.
+  콘텐츠 쓰기와 analyze-look 호출도 운영자로 제한했다
+- 유저 데이터(user_profiles, saved_looks, user_agreements)는 본인만 읽고 쓴다
+- 운영자 지정은 SQL로만 한다 (admin_users는 정책 없음 = API 접근 불가)
+- 새 테이블도 만들 때부터 RLS를 켠다
+남은 항목: 데모 계정(stylemuse.demo@gmail.com) 삭제, 배포 도메인 HTTPS 확인,
+내부 관리계획 문서·접근권한 정기 점검 절차.
+상세 현황은 README.md 「보안 · 개인정보」, 근거는 docs/DECISIONS.md 「보안 조치」.
