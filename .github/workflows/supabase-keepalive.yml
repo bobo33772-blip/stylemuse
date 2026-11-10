@@ -1,11 +1,12 @@
 # Supabase 무료 플랜은 7일간 DB 활동이 적으면 프로젝트를 일시정지한다.
-# 정지되면 앱의 코디·사진이 전부 안 뜨므로, 매일 한 번 공개 코디를 1건 조회해 활동을 남긴다.
+# 정지되면 앱의 코디·사진이 전부 안 뜨므로, 하루 4번 공개 코디를 1건 조회해 활동을 남긴다.
+# (공식 문서: 지난 일주일간 하루 몇 건의 DB 요청이면 정지되지 않는다)
 # URL·키는 브라우저에 이미 공개된 static/config.js 값을 그대로 읽는다(publishable 키, SELECT만 가능).
 name: Supabase keepalive
 
 on:
   schedule:
-    - cron: '17 0 * * *'   # 매일 09:17 KST
+    - cron: '17 */6 * * *'   # 6시간마다
   workflow_dispatch:
 
 jobs:
